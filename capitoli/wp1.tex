@@ -10,24 +10,36 @@ Infine, verranno formalizzate le proprietà di resilienza che il protocollo deve
 
 La definizione accurata del modello costituisce la base necessaria per lo sviluppo di un sistema di voto elettronico che sia non solo funzionale, ma anche sicuro e affidabile, in grado di resistere a una vasta gamma di minacce e di garantire la fiducia degli elettori e degli osservatori.
 
-\section{Introduzione e Funzionalità del Sistema}
-\label{sec:1.1_funzionalita}
 
+\section{Tipologia di elezione}
+\label{sec:1.1_tipologia_elezione}
 
-
+Per questo sistema si è stabilito di operare su un modello di elezione a lista chiusa caratterizzato da un numero $N$ generico di opzioni di voto. In tale configurazione, l'elettore esprime la propria preferenza selezionando una singola opzione all'interno di un insieme prefissato, senza la possibilità di indicare preferenze nominali aggiuntive o di ordinare i candidati secondo un sistema di voto preferenziale. 
+Questo tipo di elezione è comunemente utilizzato in contesti in cui si desidera semplificare il processo di voto e di conteggio, riducendo al minimo le possibilità di errore da parte degli elettori e facilitando la gestione del sistema. La scelta di un modello a lista chiusa consente inoltre di focalizzarsi su aspetti specifici della sicurezza e dell'integrità del voto, senza dover affrontare le complessità aggiuntive introdotte da sistemi di voto più articolati.
+Inoltre, il sistema può essere ricondotto anche al caso particolare di referendum binario, nel quale l'insieme delle opzioni di voto è costituito unicamente da due alternative possibili, ad esempio ``Sì'' e ``No''. Tale generalizzazione permette di mantenere il modello sufficientemente astratto da poter essere applicato a differenti scenari elettorali.
 
 
 \clearpage
 
 \section{Attori Onesti del Sistema}
 \label{sec:1.2_attori_onesti}
-
+% Mappatura delle entità che operano in conformità alle regole del protocollo.  Definizione dei ruoli separati (es. Elettore, Sistema di Autenticazione, Autorità Elettorale per la raccolta dei voti, Verificatori esterni).
 
 \section{Threat Model}
 \label{sec:1.3_threat_model}
+% Identificazione degli avversari interessati a compromettere il sistema, divisi per tipologia (interni/esterni, attivi/passivi).  
+
+% Specifica dettagliata delle risorse, delle capacità (es. accesso alla rete, accesso ai server) e degli obiettivi di attacco per ogni avversario (es. alterare il conteggio, violare l'anonimato, coercizione) .
 
 \section{Proprietà di Sicurezza da Preservare}
 \label{sec:1.4_proprieta_sicurezza}
+% Declinazione delle garanzie di sicurezza in "micro-proprietà" atomiche, per facilitare la successiva argomentazione analitica.  
+% Suddivisione in macro-categorie come da traccia:
+% Autenticità e Unicità .  
+% Confidenzialità e Segretezza.  
+% Integrità e Invarianza.  
+% Verificabilità (Individuale e Universale)
 
 \section{Completeness}
 \label{sec:1.5_completeness}
+% Descrizione del "percorso felice", ovvero il funzionamento garantito del sistema quando tutte le parti coinvolte operano onestamente e senza deviazioni dal protocollo
