@@ -135,29 +135,55 @@ literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{
 % --- CORPO DEL DOCUMENTO ---
 \begin{document}
 
-% ================ FRONTESPIZIO ================
+% ================= FRONTESPIZIO =================
 \begin{titlepage}
-    \begin{center}
-        \huge{\uppercase{Università degli Studi di Salerno}}\\[10mm]
-        \uppercase{\normalsize DIPARTIMENTO DI INGEGNERIA DELL'INFORMAZIONE ED ELETTRICA\\ E MATEMATICA APPLICATA}\\[15mm]
-        \normalsize{Corso: \\ALGORITMI E PROTOCOLLI PER LA SICUREZZA}\\[20mm]
-        \includegraphics[width=0.35\textwidth]{immagini/logo_unisa}\\[20mm]
-        \textbf{\large PROJECT WORK}\\[15mm]
-    \end{center}
 
-    \begin{center}
-        \Large{\textbf{Carmine Terracciano}}
-        \quad
-        \large{Mat. IE22700109}\\[5mm]
-        \Large{\textbf{Ferdinando Paparo}}
-        \quad
-        \large{Mat. IE22700107}\\[10mm]
-    \end{center}
+\begin{center}
 
-    \vfill
-    \begin{center}
-        \large \uppercase{Anno Accademico 2025/2026}
-    \end{center}
+    % Università
+    {\Huge Università degli Studi di Salerno}\\[8mm]
+
+    % Dipartimento
+    {\Large
+    \parbox{0.9\textwidth}{\centering
+    DIPARTIMENTO DI INGEGNERIA DELL'INFORMAZIONE ED ELETTRICA E 
+    MATEMATICA APPLICATA}
+    }\\[20mm]
+
+    % Logo
+    \includegraphics[width=0.30\textwidth]{immagini/logo_unisa}\\[15mm]
+
+    % Corso
+    {\LARGE Algoritmi e Protocolli per la Sicurezza}\\[24mm]
+
+    % Tipo elaborato
+    {\Huge\bfseries PROJECT WORK}\\[17mm]
+
+\end{center}
+
+\vfill
+
+% Partecipanti
+% Partecipanti
+\begin{center}
+
+    \begin{tabular}{c @{\hspace{2cm}} c}
+        \textbf{\Large Carmine Terracciano} &
+        \textbf{\Large Ferdinando Paparo} \\[3mm]
+
+        \large Matr. IE22700109 &
+        \large Matr. IE22700107
+    \end{tabular}
+
+\end{center}
+
+\vfill
+
+% Anno Accademico
+\begin{center}
+    {\huge Anno Accademico 2025/2026}
+\end{center}
+
 \end{titlepage}
 
 
