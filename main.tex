@@ -187,6 +187,30 @@ literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{
 \end{titlepage}
 
 
+% Crea un sommario/indice
+% =================================================================
+% --- SOMMARIO INIZIA A SINISTRA ---
+%
+% 1. Salva il comando \cleardoublepage originale in \oldcleardoublepage
+\let\oldcleardoublepage\cleardoublepage
+%
+% 2. Fai in modo che \cleardoublepage si comporti come \clearpage
+%    (che va solo alla pagina *successiva*, non alla pagina *destra successiva*)
+\let\cleardoublepage\clearpage
+
+% Ora \tableofcontents userà la nostra versione "modificata" di \cleardoublepage
+% e inizierà felicemente sulla pagina 2 (sinistra)
+\tableofcontents
+
+% 3. Ripristina il comando \cleardoublepage originale
+%    così tutti i capitoli successivi (\input{capitoli...})
+%    torneranno a iniziare sulla pagina destra, come da regola "book".
+\let\cleardoublepage\oldcleardoublepage
+%
+% --- FINE ---
+% =================================================================
+
+
 % --- INIZIO DEL CONTENUTO ---
 \input{capitoli/wp1}
 
