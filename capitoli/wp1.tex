@@ -37,7 +37,7 @@ Il compromesso fondamentale adottato in questa scelta progettuale risiede quindi
 
 \section{Attori Onesti del Sistema}
 \label{sec:1.3_attori_onesti}
-% Mappatura delle entità che operano in conformità alle regole del protocollo.  Definizione dei ruoli separati (es. Elettore, Sistema di Autenticazione, Autorità Elettorale per la raccolta dei voti, Verificatori esterni).
+
 L'architettura logica del protocollo si fonda sull'interazione di quattro entità funzionali distinte, ciascuna caratterizzata da uno specifico stato informativo, compiti operativi definiti e precisi obiettivi di sicurezza da conseguire. La divisione delle funzioni presentata di seguito è finalizzata a distribuire le responsabilità operative e a prevenire la concentrazione di poteri computazionali o informativi in un singolo punto del sistema. Ciascun attore opera in modo indipendente, garantendo che il corretto svolgimento delle elezioni sia il risultato della cooperazione di componenti distinte.
 
 L'\textbf{Elettore} è l'utente che ha il diritto di partecipare alla consultazione. All'atto pratico, il suo compito è selezionare una sola opzione tra le $N$ liste chiuse disponibili, producendo un voto valido che impedisca scelte multiple o irregolari. L'Elettore ha due obiettivi principali: da una parte, vuole la garanzia che il suo voto resti completamente segreto, senza che nessuno possa mai collegare la sua identità alla preferenza espressa. Dall'altra, ha bisogno di esercitare la verificabilità individuale. Deve cioè poter controllare in autonomia che la sua scheda sia finita intatta nell'urna elettronica e sia stata conteggiata nel risultato finale. Questa verifica, però, deve essere progettata in modo tale da non fornirgli una prova o una "ricevuta" che possa mostrare a terzi per dimostrare inequivocabilmente come ha votato.
@@ -50,8 +50,33 @@ Il \textbf{Verificatore Pubblico} è un attore indipendente e passivo, che può 
 
 \section{Assunzioni di Fiducia}
 \label{sec:1.4_assunzioni_fiducia}
-% Dichiarazione esplicita e strutturata delle ipotesi di onestà su cui si fonda la sicurezza del protocollo (es. onestà dell'Identity Provider, assenza di collusione, sicurezza del canale TLS).
-% Per ciascuna assunzione di fiducia, analizzare obbligatoriamente il rischio residuo: cosa succede se l'assunzione viene violata? Quali proprietà di sicurezza crollerebbero (es. perdita dello pseudo-anonimato o dell'integrità)?
+
+La sicurezza di un sistema di voto elettronico non è mai assoluta, ma dipende da alcune ipotesi sul comportamento di chi vi partecipa e sull'ambiente in cui si vota. Di seguito analizziamo queste assunzioni di fiducia, spiegando perché le abbiamo scelte e cosa succede se non vengono rispettate. In generale, il sistema garantisce la segretezza, l'integrità e la verificabilità del voto a condizione che si verifichino le seguenti assunzioni.
+
+\subsection*{1. Non collusione tra Sistema di Autenticazione e Autorità Elettorale}
+\textbf{Dichiarazione:} Si assume che il Sistema di Autenticazione (SA) e l'Autorità Elettorale (AE) lavorino in modo del tutto indipendente, senza scambiarsi informazioni di nascosto. \\
+\textbf{Motivazione e compromessi:} Il sistema garantisce lo pseudoanonimato a condizione che questa separazione venga rispettata. Il SA sa chi vota, mentre l'AE sa cosa viene votato. Tenerli separati è un compromesso pratico per avere un sistema leggero e funzionante, fidandoci del fatto che i due gestori non si accordino per imbrogliare. \\
+\textbf{Rischio Residuo:} Se questa assunzione crolla e le due entità comunicano, si perde totalmente lo pseudoanonimato. Gli amministratori potrebbero facilmente incrociare i dati di accesso con l'arrivo delle schede, scoprendo chi ha votato cosa.
+
+\subsection*{2. Integrità del terminale dell'Elettore}
+\textbf{Dichiarazione:} Si assume che il dispositivo usato dall'Elettore non sia compromesso da malware, keylogger o spyware. \\
+\textbf{Motivazione e compromessi:} Il sistema garantisce la segretezza e la correttezza del singolo voto a condizione che il dispositivo dell'utente sia "pulito". Votando a distanza non abbiamo cabine elettorali fisiche, quindi dobbiamo per forza delegare la sicurezza iniziale al dispositivo dell'elettore. Purtroppo, il sistema non può difendersi da minacce che agiscono direttamente sullo schermo o sulla tastiera dell'utente. \\
+\textbf{Rischio Residuo:} Se il dispositivo è infetto, un virus può leggere la scelta prima ancora che venga protetta, violando la segretezza. Nel peggiore dei casi, potrebbe persino inviare all'urna una preferenza diversa da quella cliccata dall'elettore.
+
+\subsection*{3. Immutabilità dell'urna elettronica}
+\textbf{Dichiarazione:} Si assume che l'Autorità Elettorale conservi i dati onestamente, funzionando come un'urna in cui si possono solo aggiungere schede, senza poterne mai cancellare o alterare nessuna. \\
+\textbf{Motivazione e compromessi:} Il sistema garantisce l'integrità del conteggio a condizione che l'AE non elimini i record. Affidare i dati a un server centrale semplifica molto la raccolta e lo scrutinio dei voti, ma ci costringe a fidarci del fatto che l'amministratore non cancelli di proposito le schede di una lista avversaria. \\
+\textbf{Rischio Residuo:} Se l'AE cancella di nascosto alcuni voti, il risultato finale sarà falsato. Questo rischio è in parte mitigato perché l'elettore non troverebbe più la sua scheda controllando l'urna pubblica, ma il sistema in sé non può impedire fisicamente all'amministratore di effettuare la cancellazione.
+
+\subsection*{4. Spazio fisico sicuro e assenza di coercizione}
+\textbf{Dichiarazione:} Si assume che l'Elettore possa votare in un momento e in un luogo privato, senza subire minacce o ricatti fisici. \\
+\textbf{Motivazione e compromessi:} In questo progetto abbiamo scelto di non permettere la modifica o la revoca del voto. Il sistema garantisce un conteggio certo e inequivocabile a condizione che il voto inviato sia definitivo. È una scelta che rende il protocollo molto più semplice da gestire ed efficiente, ma rinuncia a uno strumento utile contro la compravendita dei voti. \\
+\textbf{Rischio Residuo:} Non potendo cambiare la scelta in un secondo momento, se qualcuno costringe con la forza un elettore a votare davanti a lui, il ricatto va a buon fine. Il rischio residuo è la totale perdita di libertà del votante, un limite molto difficile da superare nei sistemi di voto a distanza.
+
+\subsection*{5. Sicurezza della crittografia di base}
+\textbf{Dichiarazione:} Si assume che gli algoritmi crittografici scelti siano sicuri e che nessun attaccante abbia a disposizione una potenza di calcolo sufficiente per romperli in tempi brevi. \\
+\textbf{Motivazione e compromessi:} Il sistema garantisce la segretezza e l'inviolabilità delle schede a condizione che la matematica alla base delle funzioni scelte sia solida. Questa è un'ipotesi inevitabile per qualsiasi software moderno: non si può progettare un protocollo digitale senza fidarsi degli strumenti che proteggono i dati. Il compromesso è che accettiamo un rischio teorico legato al futuro progresso tecnologico pur di poter implementare il sistema oggi. \\
+\textbf{Rischio Residuo:} Se un attaccante trovasse un modo per aggirare l'algoritmo crittografico, tutte le difese del sistema crollerebbero. Chi attacca potrebbe calcolare le chiavi segrete del server, riuscendo a leggere i voti individuali degli utenti e persino a modificare i risultati finali dello scrutinio senza lasciare alcuna traccia.
 
 
 \section{Threat Model}
