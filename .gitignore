@@ -1,7 +1,7 @@
 # Directory degli output temporanei
 # Ignora i contenuti, ma salva i PDF
 build/*
-!build/*.pdf
+# !build/*.pdf
 
 # File ausiliari LaTeX
 *.aux
@@ -30,7 +30,7 @@ Thumbs.db
 
 # Opzionale: escludere PDF generati automaticamente
 # Se vuoi NON includere il PDF nel repo, decommenta la riga seguente
-# *.pdf
+*.pdf
 
 # Se invece vuoi includere uno specifico PDF (es. main.pdf) lascia tutto commentato e aggiungi:
 # !main.pdf
