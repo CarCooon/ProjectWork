@@ -10,29 +10,50 @@ Infine, verranno formalizzate le proprietà di resilienza che il protocollo deve
 
 La definizione accurata del modello costituisce la base necessaria per lo sviluppo di un sistema di voto elettronico che sia non solo funzionale, ma anche sicuro e affidabile, in grado di resistere a una vasta gamma di minacce e di garantire la fiducia degli elettori e degli osservatori.
 
+\clearpage
+
 
 \section{Tipologia di elezione}
 \label{sec:1.1_tipologia_elezione}
 
-Per questo sistema si è stabilito di operare su un modello di elezione a lista chiusa caratterizzato da un numero $N$ generico di opzioni di voto. In tale configurazione, l'elettore esprime la propria preferenza selezionando una singola opzione all'interno di un insieme prefissato, senza la possibilità di indicare preferenze nominali aggiuntive o di ordinare i candidati secondo un sistema di voto preferenziale. 
-Questo tipo di elezione è comunemente utilizzato in contesti in cui si desidera semplificare il processo di voto e di conteggio, riducendo al minimo le possibilità di errore da parte degli elettori e facilitando la gestione del sistema. La scelta di un modello a lista chiusa consente inoltre di focalizzarsi su aspetti specifici della sicurezza e dell'integrità del voto, senza dover affrontare le complessità aggiuntive introdotte da sistemi di voto più articolati.
-Inoltre, il sistema può essere ricondotto anche al caso particolare di referendum binario, nel quale l'insieme delle opzioni di voto è costituito unicamente da due alternative possibili, ad esempio ``Sì'' e ``No''. Tale generalizzazione permette di mantenere il modello sufficientemente astratto da poter essere applicato a differenti scenari elettorali.
+Per questo sistema si è stabilito di operare su un modello di elezione a lista chiusa caratterizzato da un numero $N$ generico di opzioni di voto. In tale configurazione, l'elettore esprime la propria preferenza selezionando una singola opzione all'interno di un insieme prefissato, senza la possibilità di indicare preferenze nominali libere o di ordinare i candidati secondo un sistema di voto preferenziale. 
+Il sistema può essere ricondotto anche al caso particolare di referendum binario, nel quale l'insieme delle opzioni di voto è costituito unicamente da due alternative possibili (ad esempio ``Sì'' e ``No''). Tale generalizzazione permette di mantenere il modello sufficientemente astratto da poter essere applicato a differenti scenari elettorali.
 
+La scelta di questo specifico modello è motivata da precise implicazioni sulla complessità crittografica del protocollo e sui compromessi adottabili, come richiesto dai vincoli di progetto. Dal punto di vista crittografico e computazionale, limitare il dominio delle scelte a un insieme discreto, finito e noto a priori riduce drasticamente la complessità delle operazioni necessarie a garantire la validità del voto. La gestione di una preferenza nominale aperta richiederebbe la cifratura di stringhe di testo di lunghezza variabile, esponendo il sistema a problematiche complesse di validazione dell'input e aumentando sensibilmente il carico computazionale.
+
+Al contrario, l'utilizzo di una lista chiusa permette di codificare i voti attraverso formati predefiniti o token standardizzati a lunghezza fissa. Questo approccio semplifica l'applicazione delle primitive crittografiche che verranno utilizzate nel protocollo (quali cifratura asimmetrica e firme digitali) per garantire la confidenzialità e l'integrità della singola scheda. Inoltre, dal punto di vista del \textit{threat model}, il formato rigido del voto rappresenta una fondamentale contromisura contro il rischio di coercizione e compravendita dei voti: impedisce infatti all'elettore di inserire "segni di riconoscimento" (come errori di battitura intenzionali in una stringa di testo libero) per dimostrare a un avversario la propria scelta.
+
+Il compromesso fondamentale adottato in questa scelta progettuale risiede quindi nel privilegiare l'efficienza algoritmica, l'integrità e la resistenza alla coercizione a discapito della massima espressività politica dell'elettore. Si ritiene che, per gli scopi di questo protocollo, garantire in modo incondizionato la correttezza del conteggio e la validazione strutturale delle schede cifrate sia prioritario e strategicamente più solido rispetto all'implementazione di sistemi di preferenza complessi.
 
 \clearpage
 
+
+\section{Funzionalità del sistema}
+\label{sec:1.2_funzionalità_sistema}
+% Descrizione dettagliata delle funzionalità e del perimetro logico del protocollo (Nota 1.2: discutere in modo dettagliato e non ambiguo la funzionalità da realizzare).
+% Specificare l'architettura ad alto livello (dalla registrazione allo scrutinio).
+% Dichiarare esplicitamente le regole del voto e i vincoli progettuali: ad esempio, se si prevede o meno la revocabilità/sostituzione del voto prima della chiusura delle urne e le motivazioni di tale scelta.
+
+
 \section{Attori Onesti del Sistema}
-\label{sec:1.2_attori_onesti}
+\label{sec:1.3_attori_onesti}
 % Mappatura delle entità che operano in conformità alle regole del protocollo.  Definizione dei ruoli separati (es. Elettore, Sistema di Autenticazione, Autorità Elettorale per la raccolta dei voti, Verificatori esterni).
 
-\section{Threat Model}
-\label{sec:1.3_threat_model}
-% Identificazione degli avversari interessati a compromettere il sistema, divisi per tipologia (interni/esterni, attivi/passivi).  
 
+\section{Assunzioni di Fiducia}
+\label{sec:1.4_assunzioni_fiducia}
+% Dichiarazione esplicita e strutturata delle ipotesi di onestà su cui si fonda la sicurezza del protocollo (es. onestà dell'Identity Provider, assenza di collusione, sicurezza del canale TLS).
+% Per ciascuna assunzione di fiducia, analizzare obbligatoriamente il rischio residuo: cosa succede se l'assunzione viene violata? Quali proprietà di sicurezza crollerebbero (es. perdita dello pseudo-anonimato o dell'integrità)?
+
+
+\section{Threat Model}
+\label{sec:1.5_threat_model}
+% Identificazione degli avversari interessati a compromettere il sistema, divisi per tipologia (interni/esterni, attivi/passivi).  
 % Specifica dettagliata delle risorse, delle capacità (es. accesso alla rete, accesso ai server) e degli obiettivi di attacco per ogni avversario (es. alterare il conteggio, violare l'anonimato, coercizione) .
 
+
 \section{Proprietà di Sicurezza da Preservare}
-\label{sec:1.4_proprieta_sicurezza}
+\label{sec:1.6_proprieta_sicurezza}
 % Declinazione delle garanzie di sicurezza in "micro-proprietà" atomiche, per facilitare la successiva argomentazione analitica.  
 % Suddivisione in macro-categorie come da traccia:
 % Autenticità e Unicità .  
@@ -40,6 +61,7 @@ Inoltre, il sistema può essere ricondotto anche al caso particolare di referend
 % Integrità e Invarianza.  
 % Verificabilità (Individuale e Universale)
 
+
 \section{Completeness}
-\label{sec:1.5_completeness}
+\label{sec:1.7_completeness}
 % Descrizione del "percorso felice", ovvero il funzionamento garantito del sistema quando tutte le parti coinvolte operano onestamente e senza deviazioni dal protocollo
