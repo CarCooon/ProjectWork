@@ -30,9 +30,33 @@ Il compromesso fondamentale adottato in questa scelta progettuale risiede quindi
 
 \section{Funzionalità del sistema}
 \label{sec:1.2_funzionalità_sistema}
-% Descrizione dettagliata delle funzionalità e del perimetro logico del protocollo (Nota 1.2: discutere in modo dettagliato e non ambiguo la funzionalità da realizzare).
-% Specificare l'architettura ad alto livello (dalla registrazione allo scrutinio).
-% Dichiarare esplicitamente le regole del voto e i vincoli progettuali: ad esempio, se si prevede o meno la revocabilità/sostituzione del voto prima della chiusura delle urne e le motivazioni di tale scelta.
+
+La funzionalità primaria del protocollo consiste nella gestione di un'elezione elettronica sicura all'interno di un ambiente remoto e non fisicamente controllato, garantendo che l'intero processo sia trasparente, verificabile e protetto da manipolazioni sistemiche. Al fine di delineare in modo dettagliato e non ambiguo il perimetro logico del sistema, il funzionamento del protocollo viene modellato attraverso un flusso sequenziale suddiviso in tre macro-fasi funzionali e cronologiche, propedeutiche l'una all'altra:
+
+\begin{enumerate}
+    \item \textbf{Fase di Registrazione e Autenticazione:} In questa fase iniziale, il sistema ha il compito di verificare l'eleggibilità dell'utente che richiede di accedere alla votazione. Il perimetro funzionale impone l'accertamento che l'utente sia legittimamente incluso nelle liste degli aventi diritto e che non abbia ancora speso il proprio diritto di voto. L'output logico di questa fase è l'emissione di un'autorizzazione formale che abiliti l'utente alle fasi successive, garantendo tassativamente che tale autorizzazione non contenga elementi idonei a svelare l'identità reale del richiedente.
+    \item \textbf{Fase di Votazione ed Espressione del Suffragio:} Una volta ottenuta l'abilitazione, l'elettore predispone la propria scheda selezionando una singola preferenza all'interno del dominio ristretto della lista chiusa. Il sistema garantisce la sottomissione sicura della scheda in modalità confidenziale, inserendola all'interno di un registro delle transazioni elettorali. Come output di questa fase, il sistema genera e restituisce una ricevuta logica dell'avvenuta corretta sottomissione, che fungerà da elemento di controllo per la successiva fase di verifica.
+    \item \textbf{Fase di Scrutinio e Pubblicazione:} Al raggiungimento del termine temporale stabilito, il sistema impedisce in modo definitivo la ricezione di qualunque ulteriore scheda, dichiarando chiusa la raccolta. Viene quindi avviata la procedura di calcolo aggregato delle preferenze registrate nel sistema. La funzionalità richiesta impone che l'aggregazione dei risultati avvenga in modo matematicamente separato rispetto alle singole schede, terminando con la pubblicazione del conteggio finale dei voti e delle relative prove di correttezza necessarie alla validazione indipendente da parte di osservatori esterni.
+\end{enumerate}
+
+\subsection*{Vincoli operativi e Regole del voto}
+Il modello definisce due vincoli funzionali necessari per preservare la correttezza formale del processo:
+\begin{itemize}
+    \item \textbf{Vincolo di Unicità (One-Man, One-Vote):} Ciascun elettore ha diritto a esprimere un solo voto valido nel conteggio finale. Il sistema deve riconoscere e bloccare automaticamente qualsiasi tentativo di inserimento multiplo o ridondante associato al medesimo diritto di voto.
+    \item \textbf{Non-correlabilità dei Flussi Informativi:} Il perimetro logico del sistema impone una barriera strutturale invalicabile tra i dati crittografici utilizzati per validare l'identità e l'eleggibilità dell'utente e i dati crittografici che contengono la preferenza espressa. Questo disaccoppiamento dei flussi di informazione è un requisito funzionale primario per garantire matematicamente che l'omogeneità delle schede impedisca la ricostruzione a ritroso del legame tra votante e voto.
+\end{itemize}
+
+\subsection*{Analisi sulla Revocabilità e Sostituzione del Voto}
+In conformità con le direttive di progetto, è stata attentamente valutata l'opportunità di consentire all'elettore di modificare, sovrascrivere o annullare il proprio voto prima della chiusura formale delle urne. Questa specifica proprietà introduce un profondo conflitto strutturale tra la resilienza alla coercizione, lo pseudo-anonimato e l'efficienza complessiva del sistema.
+
+Se da un lato la revocabilità offre una difesa teorica contro il voto di scambio e la coercizione in ambienti remoti non controllati (permettendo a un elettore coartato di votare sotto minaccia e successivamente esprimere il vero voto in isolamento), dall'altro lato la sua introduzione comporta criticità sistemiche che in questo protocollo vengono ritenute inaccettabili per le seguenti motivazioni:
+\begin{enumerate}
+    \item \textbf{Minaccia allo Pseudo-anonimato:} Per consentire la sostituzione o l'aggiornamento di una scheda precedentemente inviata, l'infrastruttura di memorizzazione dovrebbe necessariamente disporre di un meccanismo per associare le diverse transazioni espresse dallo stesso utente (ad esempio tramite un identificativo persistente), oppure richiedere all'elettore di dimostrare la paternità del voto precedente. Questo legame logico aumenta la superficie d'attacco, innalzando il rischio di violazione definitiva dell'anonimato.
+    \item \textbf{Violazione del Vincolo di Efficienza:} Gestire la purificazione di voti multipli o la sovrascrittura dinamica delle schede richiede un'architettura logica complessa e protocolli di interazione continui. Ciò incrementerebbe in modo esponenziale la latenza di rete e il costo computazionale, violando il vincolo di efficienza che costituisce un limite progettuale stringente fin da questo primo Work Package.
+    \item \textbf{Complessità della Verificabilità:} Permettere voti modificabili complicherebbe le procedure di verifica individuale e universale. Gli osservatori non dovrebbero semplicemente verificare l'inclusione di una scheda in un registro immutabile, ma dovrebbero validare la corretta cronologia e l'effettivo scarto delle schede obsolete, richiedendo strumenti logici avanzati che esulano dagli obiettivi del sistema.
+\end{enumerate}
+
+Sulla base di questa onesta analisi critica dei limiti strutturali, si stabilisce come scelta progettuale definitiva che \textbf{il voto espresso sia rigidamente non revocabile e non modificabile (modello "one-shot")}. Una volta che la scheda viene trasmessa e registrata, essa è considerata definitiva e immutabile. Il rischio residuo legato alla coercizione estemporanea viene accettato e mitigato parzialmente attraverso la rigidità del formato a lista chiusa analizzato nella sezione precedente, privilegiano in modo assoluto la linearità del protocollo, la robustezza dello pseudo-anonimato e la massima efficienza computazionale globale del sistema.
 
 
 \section{Attori Onesti del Sistema}
