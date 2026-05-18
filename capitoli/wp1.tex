@@ -103,10 +103,40 @@ La sicurezza di un sistema di voto elettronico non è mai assoluta, ma è intrin
 \textbf{Rischio Residuo:} Se un attaccante trovasse un modo per aggirare l'algoritmo crittografico, tutte le difese del sistema crollerebbero. Chi attacca potrebbe calcolare le chiavi segrete del server, riuscendo a leggere i voti individuali degli utenti e persino a modificare i risultati finali dello scrutinio senza lasciare alcuna traccia.
 
 
-\section{Threat Model}
-\label{sec:1.5_threat_model}
-% Identificazione degli avversari interessati a compromettere il sistema, divisi per tipologia (interni/esterni, attivi/passivi).  
-% Specifica dettagliata delle risorse, delle capacità (es. accesso alla rete, accesso ai server) e degli obiettivi di attacco per ogni avversario (es. alterare il conteggio, violare l'anonimato, coercizione) .
+\section{Modello di Minaccia (Threat Model)}
+\label{sec:1.4_threat_model}
+
+Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità ostili a cui il sistema deve saper resistere. Nel rispetto delle assunzioni di fiducia appena descritte abbiamo identificato diversi profili di attacco distinti. È importante sottolineare che l'inclusione di attori interni come il Sistema di Autenticazione o l'Autorità Elettorale non contraddice le assunzioni precedenti, ma serve a valutare la robustezza del protocollo nel caso in cui un singolo componente devii dal comportamento previsto. Ognuno di questi avversari dispone di mezzi differenti, persegue scopi mirati e colpisce una specifica area del protocollo.
+
+\subsection*{1. Avversario di Rete (Man-in-the-Middle)}
+\textbf{Tipologia:} Attivo / Passivo. \\
+\textbf{Descrizione:} Questo avversario opera direttamente sul canale di trasmissione dei dati. In modalità passiva, tenta di violare la segretezza spiando i pacchetti in transito per scoprire l'associazione tra elettori e liste scelte. In modalità attiva, il suo obiettivo è alterare la comunicazione in transito, cercando di modificare il voto contenuto all'interno di un pacchetto prima che questo raggiunga il server dell'urna elettronica. \\
+\textbf{Risorse:} Dispone del controllo totale dell'infrastruttura di rete, comprese le connessioni internet pubbliche, le reti locali e i nodi dei provider di servizi. Questa posizione strategica gli permette di leggere, bloccare, ritrasmettere o tentare di manipolare qualsiasi dato scambiato tra i vari attori del sistema, pur non possedendo l'accesso ad alcuna chiave crittografica segreta.
+
+\subsection*{2. Attaccante DoS (Denial of Service)}
+\textbf{Tipologia:} Attivo. \\
+\textbf{Descrizione:} L'obiettivo di questo profilo è bloccare la piattaforma elettorale per impedirne il corretto utilizzo. Non mira a rubare informazioni o a modificare i dati interni, ma vuole compromettere la disponibilità del servizio, facendo in modo che gli utenti non riescano a raggiungere i server o a inviare la propria preferenza prima della scadenza del tempo. \\
+\textbf{Risorse:} Ha a disposizione una notevole larghezza di banda e strumenti capaci di generare enormi flussi di traffico di rete. Utilizza queste risorse per saturare le connessioni verso i server dedicati all'autenticazione e alla raccolta delle schede, fino a provocare il blocco delle comunicazioni.
+
+\subsection*{3. Falsario}
+\textbf{Tipologia:} Attivo. \\
+\textbf{Descrizione:} Questo avversario si concentra sulla manipolazione dei meccanismi di validazione. Il suo obiettivo è ingannare il sistema sottomettendo schede elettorali volutamente malformate oppure falsificando le firme digitali per forzare l'accettazione di voti illegittimi all'interno dell'urna, eludendo di fatto i controlli di integrità. \\
+\textbf{Risorse:} Dispone di notevoli capacità di calcolo e di una conoscenza profonda degli algoritmi del sistema. Interagisce con il protocollo dall'esterno con lo scopo di aggirare i controlli di sicurezza del sistema, ma non ha alcun accesso amministrativo ai server.
+
+\subsection*{4. Elettore Disonesto (o Impostore)}
+\textbf{Tipologia:} Attivo. \\
+\textbf{Descrizione:} È un utente che tenta di violare i vincoli e le procedure del protocollo elettorale. I suoi obiettivi spaziano dal tentare di votare più volte, all'usare le credenziali rubate a un altro studente per votare al suo posto. Tenta inoltre di estrarre dal sistema una "ricevuta" matematica da poter vendere a terzi per dimostrare inequivocabilmente come ha votato (voto di scambio). \\
+\textbf{Risorse:} Possiede credenziali di accesso valide e conosce il funzionamento dell'interfaccia di voto ma, come il falsario, non ha alcun potere gestionale sull'infrastruttura centrale.
+
+\subsection*{5. Il Sistema di Autenticazione Disonesto}
+\textbf{Tipologia:} Attivo / Passivo. \\
+\textbf{Descrizione:} Questo avversario sfrutta il proprio ruolo di controllo degli accessi per minare la riservatezza delle elezioni e la correttezza della partecipazione. Quando agisce in modo passivo, cerca di ricostruire il legame tra l'identità dell'utente e la preferenza espressa, provando a incrociare i dati di chi si collega con i voti che appaiono pubblicamente. Quando agisce in modo attivo, tenta di alterare l'andamento del voto escludendo ingiustamente utenti che avrebbero il diritto di partecipare o, al contrario, permettendo il voto a soggetti non autorizzati. \\
+\textbf{Risorse:} Opera dall'interno del sistema con il controllo completo sulla gestione delle identità e sui permessi di ingresso alla piattaforma. Ha la capacità di tracciare le richieste di accesso e di emettere le autorizzazioni necessarie per votare, ma non ha alcun potere di gestione sull'urna elettronica né la possibilità di vedere o manipolare le chiavi destinate al conteggio dei voti.
+
+\subsection*{6. Autorità Elettorale Disonesta}
+\textbf{Tipologia:} Attivo / Passivo. \\
+\textbf{Descrizione:} Questo avversario sfrutta il suo ruolo centrale nella raccolta delle schede per falsare l'esito della consultazione. Quando agisce in modo passivo, cerca di scoprire le preferenze in anticipo per monitorare segretamente l'andamento delle votazioni. Quando opera in modo attivo, tenta di alterare il conteggio finale, scartando di proposito voti validi oppure inserendo preferenze arbitrarie all'interno dell'urna. \\
+\textbf{Risorse:} Rappresenta la minaccia interna con il controllo più ampio sui dati raccolti. Gestisce direttamente l'infrastruttura che ospita l'urna digitale e la bacheca pubblica accessibile a tutti. Ha in custodia i voti protetti e si occupa materialmente del calcolo dei risultati, ma non ha a disposizione le informazioni necessarie per collegare una specifica scheda alla persona reale che l'ha inviata.
 
 
 \section{Proprietà di Sicurezza da Preservare}
