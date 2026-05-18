@@ -139,6 +139,9 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 \textbf{Risorse:} Rappresenta la minaccia interna con il controllo più ampio sui dati raccolti. Gestisce direttamente l'infrastruttura che ospita l'urna digitale e la bacheca pubblica accessibile a tutti. Ha in custodia i voti protetti e si occupa materialmente del calcolo dei risultati, ma non ha a disposizione le informazioni necessarie per collegare una specifica scheda alla persona reale che l'ha inviata.
 
 
+\clearpage
+
+
 \section{Proprietà di Sicurezza da Preservare}
 \label{sec:1.6_proprieta_sicurezza}
 % Declinazione delle garanzie di sicurezza in "micro-proprietà" atomiche, per facilitare la successiva argomentazione analitica.  
@@ -147,6 +150,43 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 % Confidenzialità e Segretezza.  
 % Integrità e Invarianza.  
 % Verificabilità (Individuale e Universale)
+
+A fronte del Modello di Minaccia delineato nella sezione precedente, il protocollo crittografico è progettato per garantire un set di proprietà di sicurezza fondamentali. Tali proprietà definiscono le capacità di resilienza del sistema in presenza di attacchi attivi o passivi, assicurando che gli obiettivi primari dell'elezione vengano preservati o, nell'eventualità di una compromissione, che l'attacco venga matematicamente rilevato. 
+
+Di seguito vengono formalizzate le proprietà che il sistema si prefigge di garantire, esplicitando per ciascuna di esse la minaccia che mira a neutralizzare.
+
+\subsection*{1. Autenticità}
+\textbf{Definizione:} Solo ed esclusivamente gli elettori legittimi, preventivamente identificati e autenticati tramite credenziali crittografiche verificabili, hanno il diritto e la capacità tecnica di partecipare alla consultazione elettorale.
+\\
+\textbf{Resilienza agli attacchi:} Questa proprietà costituisce la difesa primaria contro il \textit{Falsario} e l'\textit{Elettore Disonesto (Impostore)}. Il sistema garantisce che nessun attaccante esterno possa iniettare schede valide nell'urna senza possedere un'abilitazione regolarmente emessa. Inoltre, previene lo \textit{spoofing} dell'identità, impedendo a un utente di votare a nome di un altro elettore senza esserne in possesso delle credenziali crittografiche.
+
+\subsection*{2. Unicità (One-Man, One-Vote)}
+\textbf{Definizione:} Ciascun elettore legittimo può far confluire al massimo un solo voto valido nel conteggio finale dello scrutinio.
+\\
+\textbf{Resilienza agli attacchi:} Questa proprietà contrasta direttamente l'\textit{Elettore Disonesto} che tenta di sbloccare o aggirare i limiti dell'interfaccia per sottomissioni multiple (doppio voto). La garanzia di unicità si fonda sul corretto funzionamento del Sistema di Autenticazione, il quale deve tracciare l'avvenuta partecipazione dell'utente senza tuttavia apporre firme identificabili sulla scheda cifrata, mantenendo così il disaccoppiamento logico.
+
+\subsection*{3. Segretezza e Pseudo-anonimato}
+\textbf{Definizione:} Il contenuto del voto espresso dal singolo elettore non deve in alcun modo essere rivelabile o associabile alla sua identità reale. Tale garanzia deve resistere anche a tentativi di de-anonimizzazione basati sull'incrocio delle informazioni di traffico o dei metadati.
+\\
+\textbf{Resilienza agli attacchi:} La segretezza protegge l'elettore dall'\textit{Avversario di Rete (passivo)}, che tenta di intercettare le schede in chiaro, e dalle entità interne (\textit{Sistema di Autenticazione Disonesto} e \textit{Autorità Elettorale Disonesta} in modalità passiva). Sotto l'assunzione di non-collusione (Sezione \ref{sec:1.4_assunzioni_fiducia}), l'architettura a ruoli separati garantisce che né chi conosce l'identità (SA) né chi calcola i voti (AE) disponga dei dati sufficienti per ricostruire il legame logico tra elettore e preferenza. Inoltre, per scoraggiare l'acquisto dei voti da parte di terzi coercitori, il sistema tutela la segretezza garantendo la proprietà di \textit{Receipt-Freeness}: l'utente non possiede alcuna prova matematica in grado di dimostrare inequivocabilmente il contenuto del proprio voto.
+
+\subsection*{4. Integrità}
+\textbf{Definizione:} Le schede elettorali, una volta generate sul dispositivo dell'elettore e trasmesse all'infrastruttura di raccolta, non possono subire alterazioni, modifiche o soppressioni durante il transito o dopo la loro registrazione formale nell'urna elettronica.
+\\
+\textbf{Resilienza agli attacchi:} L'integrità crittografica vanifica i tentativi dell'\textit{Avversario di Rete (attivo)} di manipolare i pacchetti in volo (man-in-the-middle). Inoltre, impone all'\textit{Autorità Elettorale Disonesta} l'utilizzo di una bacheca pubblica in modalità \textit{append-only}; qualsiasi tentativo di cancellare o alterare un record precedentemente registrato invaliderà le firme crittografiche o le strutture dati, rendendo la manomissione immediatamente evidente.
+
+\subsection*{5. Verificabilità Individuale}
+\textbf{Definizione:} Ogni elettore ha a disposizione gli strumenti logici per controllare in totale autonomia che la propria scheda sia stata ricevuta intatta, registrata nell'urna pubblica e correttamente predisposta per essere inclusa nel conteggio finale.
+\\
+\textbf{Resilienza agli attacchi:} È lo strumento principale fornito all'utente onesto per rilevare operazioni fraudolente da parte di un'\textit{Autorità Elettorale Disonesta (attiva)}. Sfruttando la ricevuta di sottomissione (codice di tracciamento), l'elettore verifica che la propria transazione non sia stata vittima di \textit{data dropping} (cancellazione silenziosa del voto) o intercettata da un attacco \textit{Denial of Service} prima di raggiungere il server.
+
+\subsection*{6. Verificabilità Universale}
+\textbf{Definizione:} Il risultato finale dell'elezione, unitamente a tutte le schede cifrate raccolte nell'urna, è corredato da prove matematiche che permettono a chiunque (elettori, auditor esterni, comitati di controllo) di validare pubblicamente ed in modo indipendente la correttezza algoritmica dello scrutinio.
+\\
+\textbf{Resilienza agli attacchi:} Questa proprietà sottrae la fiducia incondizionata al gestore del sistema. Se l'\textit{Autorità Elettorale Disonesta} tentasse di aggregare i voti in modo fraudolento (aggiungendo voti dal nulla o alterando la somma a favore di una specifica lista), le prove crittografiche prodotte a corredo dello scrutinio fallirebbero. La verificabilità universale garantisce che una frode sul conteggio sia matematicamente impossibile da nascondere agli occhi di un Verificatore Pubblico.
+
+
+\clearpage
 
 
 \section{Completeness}
