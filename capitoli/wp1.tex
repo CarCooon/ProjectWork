@@ -144,46 +144,52 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 
 \section{Proprietà di Sicurezza da Preservare}
 \label{sec:1.6_proprieta_sicurezza}
-% Declinazione delle garanzie di sicurezza in "micro-proprietà" atomiche, per facilitare la successiva argomentazione analitica.  
-% Suddivisione in macro-categorie come da traccia:
-% Autenticità e Unicità .  
-% Confidenzialità e Segretezza.  
-% Integrità e Invarianza.  
-% Verificabilità (Individuale e Universale)
 
-A fronte del Modello di Minaccia delineato nella sezione precedente, il protocollo crittografico è progettato per garantire un set di proprietà di sicurezza fondamentali. Tali proprietà definiscono le capacità di resilienza del sistema in presenza di attacchi attivi o passivi, assicurando che gli obiettivi primari dell'elezione vengano preservati o, nell'eventualità di una compromissione, che l'attacco venga matematicamente rilevato. 
+Per rendere l'analisi più chiara e semplificare le scelte crittografiche dei futuri Work Package, abbiamo scomposto le garanzie di sicurezza in singole "micro-proprietà". A ognuna è stata assegnata un'etichetta univoca: questo ci aiuterà a tracciare facilmente quale protocollo o strumento tecnico andrà a coprire quel preciso requisito. 
 
-Di seguito vengono formalizzate le proprietà che il sistema si prefigge di garantire, esplicitando per ciascuna di esse la minaccia che mira a neutralizzare.
+Per mantenere una visione d'insieme ordinata, abbiamo organizzato queste proprietà in cinque aree principali che coprono l'intero sistema di voto.
 
 \subsection*{1. Autenticità}
-\textbf{Definizione:} Solo ed esclusivamente gli elettori legittimi, preventivamente identificati e autenticati tramite credenziali crittografiche verificabili, hanno il diritto e la capacità tecnica di partecipare alla consultazione elettorale.
-\\
-\textbf{Resilienza agli attacchi:} Questa proprietà costituisce la difesa primaria contro il \textit{Falsario} e l'\textit{Elettore Disonesto (Impostore)}. Il sistema garantisce che nessun attaccante esterno possa iniettare schede valide nell'urna senza possedere un'abilitazione regolarmente emessa. Inoltre, previene lo \textit{spoofing} dell'identità, impedendo a un utente di votare a nome di un altro elettore senza esserne in possesso delle credenziali crittografiche.
+L'autenticità è la proprietà che garantisce che il sistema interagisca esclusivamente con entità verificate. In particolare, questa categoria copre la primissima fase del sistema, ovvero il controllo degli accessi. L'obiettivo è creare una barriera d'ingresso solida che tenga fuori chiunque non abbia il diritto di partecipare, assicurandosi al contempo che le credenziali non possano essere clonate o falsificate.
 
-\subsection*{2. Unicità (One-Man, One-Vote)}
-\textbf{Definizione:} Ciascun elettore legittimo può far confluire al massimo un solo voto valido nel conteggio finale dello scrutinio.
-\\
-\textbf{Resilienza agli attacchi:} Questa proprietà contrasta direttamente l'\textit{Elettore Disonesto} che tenta di sbloccare o aggirare i limiti dell'interfaccia per sottomissioni multiple (doppio voto). La garanzia di unicità si fonda sul corretto funzionamento del Sistema di Autenticazione, il quale deve tracciare l'avvenuta partecipazione dell'utente senza tuttavia apporre firme identificabili sulla scheda cifrata, mantenendo così il disaccoppiamento logico.
+\begin{itemize}
+    \item \textbf{[AUTH-1] Verifica del diritto di voto:} Garantisce che il Sistema di Autenticazione (SA) emetta l'abilitazione al voto esclusivamente per i soggetti aventi diritto. Questa proprietà protegge il sistema da soggetti esterni o non autorizzati.
+    \item \textbf{[AUTH-2] Inviolabilità delle Credenziali:} Garantisce che un attaccante (o un Elettore Disonesto) non possa in alcun modo generare o falsificare delle credenziali valide per fingere di essere un altro soggetto. Dal punto di vista critico, questa proprietà impone che il token o la firma che autorizza l'accesso sia matematicamente robusto, impedendo a chiunque di scavalcare il SA per rubare il diritto di voto altrui.
+\end{itemize}
 
-\subsection*{3. Segretezza e Pseudo-anonimato}
-\textbf{Definizione:} Il contenuto del voto espresso dal singolo elettore non deve in alcun modo essere rivelabile o associabile alla sua identità reale. Tale garanzia deve resistere anche a tentativi di de-anonimizzazione basati sull'incrocio delle informazioni di traffico o dei metadati.
-\\
-\textbf{Resilienza agli attacchi:} La segretezza protegge l'elettore dall'\textit{Avversario di Rete (passivo)}, che tenta di intercettare le schede in chiaro, e dalle entità interne (\textit{Sistema di Autenticazione Disonesto} e \textit{Autorità Elettorale Disonesta} in modalità passiva). Sotto l'assunzione di non-collusione (Sezione \ref{sec:1.4_assunzioni_fiducia}), l'architettura a ruoli separati garantisce che né chi conosce l'identità (SA) né chi calcola i voti (AE) disponga dei dati sufficienti per ricostruire il legame logico tra elettore e preferenza. Inoltre, per scoraggiare l'acquisto dei voti da parte di terzi coercitori, il sistema tutela la segretezza garantendo la proprietà di \textit{Receipt-Freeness}: l'utente non possiede alcuna prova matematica in grado di dimostrare inequivocabilmente il contenuto del proprio voto.
+\subsection*{2. Unicità}
+L'unicità assicura che il peso elettorale di ciascun avente diritto sia rigorosamente limitato a una singola preferenza.Superata la barriera dell'autenticazione, il sistema deve imporre regole ferree sul numero di interazioni consentite, assicurandosi che il conteggio finale non venga gonfiato né da elettori disonesti né da manipolazioni di rete.
+\begin{itemize}
+    \item \textbf{[UNIQ-1] Singolarità del Voto:} Garantisce che ogni elettore legittimo possa inserire al massimo una singola scheda valida all'interno dell'urna. L'Autorità Elettorale (AE) deve essere in grado di riconoscere e bloccare un secondo tentativo di voto da parte dello stesso utente pur non violando lo pseudo-anonimato garantito in precedenza.
+    \item \textbf{[UNIQ-2] Irripetibilità della Scheda:} Garantisce che una scheda valida in transito sulla rete non possa essere intercettata, "copiata" e reinviata all'urna per far valere due volte lo stesso voto. Questa proprietà è fondamentale per proteggere il sistema da attacchi di replay, in cui un avversario di rete tenta di duplicare un voto legittimo per gonfiare il conteggio o per far votare più volte un elettore disonesto.
+\end{itemize}
+
+\subsection*{3. Segretezza}
+La segretezza rappresenta la garanzia di protezione della privacy elettorale. Per garantire una copertura completa, abbiamo scomposto questa macro-categoria in tre requisiti distinti: nascondere il contenuto della scheda, slegare il voto dall'identità dell'elettore e impedire la vendita della propria preferenza.
+
+\begin{itemize}
+    \item \textbf{[SEC-1] Segretezza della Scheda:} Garantisce che il valore del singolo voto rimanga illeggibile in ogni fase del processo. Oltre a respingere le intercettazioni sulla rete da parte di avversari esterni (come l'Avversario di Rete), questa proprietà impone che nemmeno l'Autorità Elettorale (AE) possa decifrare le singole schede conservate nell'urna: l'AE dovrà infatti limitarsi a calcolare il risultato finale in modo aggregato, senza mai accedere ai voti in chiaro.
+    \item \textbf{[SEC-2] Pseudo-anonimato:} Garantisce che sia matematicamente impossibile tracciare un collegamento logico tra l'identità dell'utente (verificata in fase di accesso) e la specifica scheda registrata nell'urna pubblica. Come dichiarato nel nostro Threat Model, questa proprietà si basa integralmente sull'Assunzione di Fiducia di non-collusione: essa crolla se il SA e l'AE cooperano in modo disonesto.
+    \item \textbf{[SEC-3] Assenza di Ricevuta (Receipt-Freeness):} Garantisce che il sistema non rilasci all'elettore, e non gli permetta di costruire in autonomia, alcuna prova crittografica esportabile per dimostrare a terzi come ha votato. Dal punto di vista critico, pur non potendo risolvere il problema della coercizione fisica istantanea (un limite noto e accettato del nostro modello "one-shot" irrevocabile), questa restrizione è essenziale per mitigare il problema della compravendita dei voti.
+\end{itemize}
+
 
 \subsection*{4. Integrità}
-\textbf{Definizione:} Le schede elettorali, una volta generate sul dispositivo dell'elettore e trasmesse all'infrastruttura di raccolta, non possono subire alterazioni, modifiche o soppressioni durante il transito o dopo la loro registrazione formale nell'urna elettronica.
-\\
-\textbf{Resilienza agli attacchi:} L'integrità crittografica vanifica i tentativi dell'\textit{Avversario di Rete (attivo)} di manipolare i pacchetti in volo (man-in-the-middle). Inoltre, impone all'\textit{Autorità Elettorale Disonesta} l'utilizzo di una bacheca pubblica in modalità \textit{append-only}; qualsiasi tentativo di cancellare o alterare un record precedentemente registrato invaliderà le firme crittografiche o le strutture dati, rendendo la manomissione immediatamente evidente.
+L'integrità garantisce che i dati non subiscano alterazioni o corruzioni non autorizzate in nessuna fase del processo. L'integrità del dato viene analizzata sotto tre aspetti cronologici: durante il viaggio, al momento dell'accettazione e nella fase di conservazione. Ognuno di questi momenti rappresenta un punto critico in cui un avversario potrebbe tentare di manipolare le schede per alterare il risultato finale, e ognuno richiede una protezione specifica.
 
-\subsection*{5. Verificabilità Individuale}
-\textbf{Definizione:} Ogni elettore ha a disposizione gli strumenti logici per controllare in totale autonomia che la propria scheda sia stata ricevuta intatta, registrata nell'urna pubblica e correttamente predisposta per essere inclusa nel conteggio finale.
-\\
-\textbf{Resilienza agli attacchi:} È lo strumento principale fornito all'utente onesto per rilevare operazioni fraudolente da parte di un'\textit{Autorità Elettorale Disonesta (attiva)}. Sfruttando la ricevuta di sottomissione (codice di tracciamento), l'elettore verifica che la propria transazione non sia stata vittima di \textit{data dropping} (cancellazione silenziosa del voto) o intercettata da un attacco \textit{Denial of Service} prima di raggiungere il server.
+\begin{itemize}
+    \item \textbf{[INT-1] Integrità in Transito:} Garantisce che nessun Avversario di Rete (Man-in-the-Middle) possa intercettare e alterare le schede in transito tra il dispositivo dell'elettore e il server. Qualsiasi tentativo di manipolazione modificherà la struttura crittografica del pacchetto, che verrà quindi respinto.
+    \item \textbf{[INT-2] Conformità della Scheda:} Essendo l'elezione strutturata a lista chiusa, questa proprietà garantisce che l'urna accetti esclusivamente schede ben formate. È la nostra difesa mirata contro il Falsario Crittografico: il sistema deve essere in grado di scartare matematicamente qualsiasi scheda truccata (come voti con pesi alterati o preferenze multiple nascoste) prima ancora che venga inserita nell'urna, evitando che il conteggio finale venga corrotto.
+    \item \textbf{[INT-3] Immutabilità dell'Urna:} Garantisce che, una volta registrata con successo sull'urna pubblica, nessuna scheda possa essere modificata, sostituita o cancellata prima dello scrutinio. Questa proprietà si appoggia sull'Assunzione di Fiducia relativa all'onestà dell'Autorità Elettorale. Se l'AE si comporta in modo disonesto, potrebbe tentare di alterare il risultato finale eliminando o modificando le schede memorizzate, ma il sistema non può impedire fisicamente questa azione. Tuttavia, se l'AE cancella una scheda, l'elettore che ha inviato quella scheda non la troverà più nell'urna pubblica, scoprendo così la manomissione. In questo senso, l'immutabilità dell'urna è una proprietà che protegge l'integrità del conteggio, ma non può garantire la protezione contro un attacco interno da parte dell'AE.
+\end{itemize}
 
-\subsection*{6. Verificabilità Universale}
-\textbf{Definizione:} Il risultato finale dell'elezione, unitamente a tutte le schede cifrate raccolte nell'urna, è corredato da prove matematiche che permettono a chiunque (elettori, auditor esterni, comitati di controllo) di validare pubblicamente ed in modo indipendente la correttezza algoritmica dello scrutinio.
-\\
-\textbf{Resilienza agli attacchi:} Questa proprietà sottrae la fiducia incondizionata al gestore del sistema. Se l'\textit{Autorità Elettorale Disonesta} tentasse di aggregare i voti in modo fraudolento (aggiungendo voti dal nulla o alterando la somma a favore di una specifica lista), le prove crittografiche prodotte a corredo dello scrutinio fallirebbero. La verificabilità universale garantisce che una frode sul conteggio sia matematicamente impossibile da nascondere agli occhi di un Verificatore Pubblico.
+\subsection*{5. Verificabilità}
+Questa categoria rappresenta il fondamento della trasparenza del sistema. Poiché l'elettore non può controllare fisicamente i passaggi della propria scheda, il protocollo deve fornire garanzie pubbliche per accertare che l'intero processo si sia svolto in modo onesto.
+
+\begin{itemize}
+    \item \textbf{[VER-1] Verificabilità Individuale:} Garantisce che ciascun elettore disponga degli strumenti per controllare in totale autonomia che la propria scheda sia stata regolarmente recepita e inserita all'interno dell'urna pubblica. Questa proprietà deve essere implementata coerentemente con il requisito \textbf{[SEC-3]} (Assenza di Ricevuta): il sistema deve permettere all'utente di rintracciare in modo univoco la propria scheda tra quelle pubblicate, ma senza che tale tracciabilità possa essere sfruttata per dimostrare a un coercitore il contenuto del voto.
+    \item \textbf{[VER-2] Verificabilità Universale:} Garantisce che il Verificatore Pubblico, o qualsiasi osservatore esterno, possa convalidare matematicamente l'esito delle elezioni partendo esclusivamente dai dati pubblicati a fine scrutinio. Si tratta di una contromisura definitiva per impedire all'Autorità Elettorale di manipolare il risultato finale all'insaputa degli elettori.
+\end{itemize}
 
 
 \clearpage
