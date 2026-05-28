@@ -128,12 +128,18 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 \textbf{Descrizione:} È un utente che tenta di violare i vincoli e le procedure del protocollo elettorale. I suoi obiettivi spaziano dal tentare di votare più volte, all'usare le credenziali rubate a un altro studente per votare al suo posto. Tenta inoltre di estrarre dal sistema una "ricevuta" matematica da poter vendere a terzi per dimostrare inequivocabilmente come ha votato (voto di scambio). \\
 \textbf{Risorse:} Possiede credenziali di accesso valide e conosce il funzionamento dell'interfaccia di voto ma, come il falsario, non ha alcun potere gestionale sull'infrastruttura centrale.
 
-\subsection*{5. Il Sistema di Autenticazione Disonesto}
+\subsection*{5. Coercitore}
+\textbf{Tipologia:} Attivo / Passivo. \\
+\textbf{Descrizione:} Questo avversario cerca di influenzare o controllare il voto dell'elettore. In modalità passiva, prova a raccogliere informazioni utili, come ricevute, screenshot o registrazioni, per capire come l'elettore ha votato. In modalità attiva, invece, esercita pressioni dirette, ad esempio tramite minacce, ricatti o incentivi economici, chiedendo all'elettore di votare per una lista specifica e di dimostrarlo. \\
+\textbf{Risorse:} Non possiede privilegi amministrativi sull'infrastruttura elettorale e non controlla direttamente né il Sistema di Autenticazione né l'Autorità Elettorale. Tuttavia, può interagire con l'elettore nel mondo reale, prima o durante la votazione, sfruttando il fatto che il voto avviene in un ambiente remoto e non fisicamente controllato. Questa posizione gli permette di esercitare coercizione, acquistare voti o indurre l'elettore a produrre prove esterne del proprio comportamento di voto.
+
+
+\subsection*{6. Il Sistema di Autenticazione Disonesto}
 \textbf{Tipologia:} Attivo / Passivo. \\
 \textbf{Descrizione:} Questo avversario sfrutta il proprio ruolo di controllo degli accessi per minare la riservatezza delle elezioni e la correttezza della partecipazione. Quando agisce in modo passivo, cerca di ricostruire il legame tra l'identità dell'utente e la preferenza espressa, provando a incrociare i dati di chi si collega con i voti che appaiono pubblicamente. Quando agisce in modo attivo, tenta di alterare l'andamento del voto escludendo ingiustamente utenti che avrebbero il diritto di partecipare o, al contrario, permettendo il voto a soggetti non autorizzati. \\
 \textbf{Risorse:} Opera dall'interno del sistema con il controllo completo sulla gestione delle identità e sui permessi di ingresso alla piattaforma. Ha la capacità di tracciare le richieste di accesso e di emettere le autorizzazioni necessarie per votare, ma non ha alcun potere di gestione sull'urna elettronica né la possibilità di vedere o manipolare le chiavi destinate al conteggio dei voti.
 
-\subsection*{6. Autorità Elettorale Disonesta}
+\subsection*{7. Autorità Elettorale Disonesta}
 \textbf{Tipologia:} Attivo / Passivo. \\
 \textbf{Descrizione:} Questo avversario sfrutta il suo ruolo centrale nella raccolta delle schede per falsare l'esito della consultazione. Quando agisce in modo passivo, cerca di scoprire le preferenze in anticipo per monitorare segretamente l'andamento delle votazioni. Quando opera in modo attivo, tenta di alterare il conteggio finale, scartando di proposito voti validi oppure inserendo preferenze arbitrarie all'interno dell'urna. \\
 \textbf{Risorse:} Rappresenta la minaccia interna con il controllo più ampio sui dati raccolti. Gestisce direttamente l'infrastruttura che ospita l'urna digitale e la bacheca pubblica accessibile a tutti. Ha in custodia i voti protetti e si occupa materialmente del calcolo dei risultati, ma non ha a disposizione le informazioni necessarie per collegare una specifica scheda alla persona reale che l'ha inviata.
