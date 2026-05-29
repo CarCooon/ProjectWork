@@ -1,173 +1,469 @@
 \chapter{WP2: Soluzione}
 \label{ch:wp2}
 
-\section{Panoramica dell'Architettura e Separazione Funzionale}
+% -----------------------------------------------------------------------------
+% Nota strutturale
+% -----------------------------------------------------------------------------
+% Questo file mantiene una struttura da completare in LaTeX, ma aggiornata alla
+% versione WP2_Soluzione (2).md. Le modifiche principali rispetto alla struttura
+% precedente sono:
+% - introduzione del commitment pubblico K_j = H(C_j);
+% - ridefinizione del fingerprint come F_j = H(K_j || eta_j);
+% - distinzione esplicita tra archivio interno AE e urna pubblica;
+% - terminologia "assenza di ricevuta rivelante" al posto di receipt-freeness piena;
+% - ridimensionamento del ruolo di TLS rispetto alla traffic analysis;
+% - pubblicazione per finestre dei record dell'urna;
+% - chiarimento che le firme RSA non sono textbook RSA.
+
+\section{Panoramica dell'architettura e separazione funzionale}
 \label{sec:panoramica_architettura}
-% TODO: Introdurre l'architettura client-server crittografica articolata in 5 fasi sequenziali (setup, autenticazione, votazione, conservazione, scrutinio).
-% TODO: Spiegare il principio della separazione funzionale netta tra SA (conosce identità ma non preferenze) e AE (conosce schede cifrate ma non identità).
-% TODO: Richiamare l'Assunzione di Non-Collusione (formalizzata nel WP1) come pilastro su cui regge lo pseudo-anonimato strutturale del protocollo.
-% TODO: Dichiarare l'uso obbligatorio di TLS per tutte le comunicazioni Elettore <-> SA e Elettore <-> AE, con autenticazione del server tramite certificato emesso dalla CA d'Ateneo.
-% TODO: Giustificare la necessità di TLS in aggiunta allo schema Encrypt-then-Sign applicativo: la firma applicativa garantisce l'integrità del pacchetto ma non la confidenzialità dei metadati visibili a livello di rete (nonce \eta, certificato C_p, firma \sigma, timing del traffico). TLS protegge l'intero canale impedendo all'Avversario di Rete di osservare tali valori e di costruire correlazioni temporali.
-% TODO: Inserire un preannuncio esplicito al lettore: il capitolo discuterà due limiti strutturali insuperabili con gli strumenti del corso (SEC-1 in \S~\ref{subsec:limite_sec1} e VER-2 in \S~\ref{subsec:limite_ver2}) come conseguenza ingegneristica delle primitive adottate, rimandando al WP3 l'analisi dei rischi associati.
+% Obiettivo della sezione: presentare l'idea generale del protocollo prima dei
+% dettagli tecnici.
+%
+% TODO: Introdurre l'architettura client-server crittografica articolata in cinque
+% fasi: setup, autenticazione, costruzione della scheda, conservazione e scrutinio.
+%
+% TODO: Spiegare la separazione funzionale tra Sistema di Autenticazione (SA) e
+% Autorità Elettorale (AE): il SA conosce le identità, l'AE gestisce schede cifrate
+% e pseudonimi, ma non deve conoscere l'identità reale degli elettori.
+%
+% TODO: Richiamare l'Assunzione 1 del WP1: non-collusione SA/AE. Specificare che
+% lo pseudo-anonimato realizzato dal protocollo è condizionato a tale assunzione.
+%
+% TODO: Anticipare i due limiti strutturali che resteranno anche nel WP2:
+% (i) segretezza delle singole schede rispetto all'AE durante lo scrutinio
+%     (cfr. Sezione~\ref{subsec:wp2_limite_sec1});
+% (ii) verificabilità universale piena del conteggio
+%     (cfr. Sezione~\ref{subsec:wp2_limite_ver2}).
+% Il WP3 analizzerà il rischio residuo associato a questi limiti.
 
-\section{Parametri e Notazione}
+\subsection{Requisito TLS e limiti rispetto alla traffic analysis}
+\label{subsec:wp2_tls}
+% TODO: Dichiarare che tutte le comunicazioni Elettore--SA ed Elettore--AE avvengono
+% su TLS con autenticazione del server tramite certificato emesso dalla CA d'Ateneo.
+%
+% TODO: Motivare TLS come requisito strutturale: la firma applicativa protegge
+% l'integrità del pacchetto M, ma non protegge la confidenzialità dei campi trasmessi
+% nel pacchetto, tra cui eta, C_p e sigma.
+%
+% TODO: Specificare che un avversario di rete che osservasse eta potrebbe calcolare
+% H(K || eta), con K = H(C), e cercare il fingerprint F_j nell'urna pubblica.
+%
+% TODO: Correggere esplicitamente il possibile overclaim: TLS protegge i contenuti,
+% ma non elimina completamente timing, indirizzi, dimensioni e pattern del traffico.
+%
+% TODO: Collegare questa mitigazione a due scelte applicative: t_finestra nei
+% certificati pseudonimi e pubblicazione per finestre dei record dell'urna.
+
+\section{Parametri e notazione}
 \label{sec:parametri_notazione}
-% TODO: Inserire una tabella formattata in modo pulito ed elegante (ambiente table + tabular) con due colonne: Simbolo | Significato e Contesto Operativo.
-% TODO: Elencare sistematicamente tutti i parametri del protocollo: N, (PU_ele, PR_ele), (PU_SA, PR_SA), (PU_AE, PR_AE), (PU_v, PR_v), C_p, i, r, C, \eta, id_ele, H(.), F_j, \sigma, R, t_finestra, t_apertura, t_chiusura.
+% Obiettivo della sezione: fornire una legenda unica, da usare in tutto WP2.
+%
+% TODO: Inserire una tabella con tre colonne:
+% Simbolo | Significato | Contesto operativo.
+%
+% TODO: Includere almeno i seguenti simboli:
+% N, (PU_ele, PR_ele), (PU_SA, PR_SA), (PU_AE, PR_AE), (PU_v, PR_v),
+% C_p, i, r, C, eta, id_ele, t_finestra, t_apertura, t_chiusura, H(.),
+% K_j = H(C_j), F_j = H(K_j || eta_j), sigma, R.
+%
+% TODO: Specificare che sigma e R sono firme digitali basate su hash-and-sign,
+% non su RSA textbook.
 
-\section{Il Flusso del Protocollo}
+\section{Il flusso del protocollo}
 \label{sec:flusso_protocollo}
-% TODO: Introdurre brevemente la natura cronologica, sequenziale e atomica delle fasi 0-3 che costituiscono l'happy path del sistema.
-% TODO: FIGURA: Inserire un diagramma di sequenza (utilizzando TikZ o pacchetti dedicati come pgf-umlsd) che illustri graficamente il message flow tra Elettore, SA e AE nelle fasi 1-3. Il diagramma deve evidenziare: autenticazione TLS + credenziali, rilascio di C_p, generazione locale di (PU_v, PR_v), invio del pacchetto M, rilascio della ricevuta R e successiva cancellazione locale di PR_v.
+% Obiettivo della sezione: descrivere l'happy path cronologico, dalla preparazione
+% dell'elezione fino alla registrazione della scheda.
+%
+% TODO: Inserire un diagramma di sequenza Elettore--SA--AE. Il diagramma deve mostrare:
+% 1. TLS verso SA e autenticazione con credenziali istituzionali;
+% 2. rilascio di C_p;
+% 3. TLS verso AE;
+% 4. invio di M = (C, C_p, eta, id_ele, sigma);
+% 5. controlli AE;
+% 6. rilascio di R;
+% 7. cancellazione locale di PR_v.
 
-\subsection{Fase 0 --- Setup Pre-elezione e Distribuzione delle Chiavi}
+\subsection{Fase 0 --- Setup pre-elezione e distribuzione delle chiavi}
 \label{subsec:fase_setup}
-% TODO: Descrivere la generazione indipendente delle due coppie RSA per l'AE (PU_ele/PR_ele per la cifratura delle schede; PU_AE/PR_AE per la firma di record e ricevute).
-% TODO: Giustificare l'isolamento dei domini di chiave (least privilege): la compromissione della chiave di firma PR_AE non implica la compromissione della chiave di decifratura PR_ele.
-% TODO: Descrivere la generazione della coppia (PU_SA, PR_SA) lato SA per la firma digitale dei certificati pseudonimi.
-% TODO: Delineare la pubblicazione delle chiavi pubbliche tramite la PKI istituzionale d'Ateneo mediante l'uso di certificati X.509 emessi dalla CA fidata (meccanismo della Lezione 06).
-% TODO: Mostrare la struttura e la firma crittografica del Blocco di Testa dell'urna: Params = { id_ele, PU_ele, N, lista_candidati, t_apertura, t_chiusura } firmato con PR_AE.
+\label{subsec:wp2_fase_setup}
 
-\subsection{Fase 1 --- Autenticazione ed Emissione del Certificato Pseudonimo}
+\subsubsection{Generazione delle chiavi}
+\label{subsubsec:wp2_generazione_chiavi}
+% TODO: Descrivere la generazione di due coppie RSA distinte da parte dell'AE:
+% (PU_ele, PR_ele) per la cifratura/decifratura delle schede e
+% (PU_AE, PR_AE) per la firma di record, ricevute e documento finale.
+%
+% TODO: Motivare la separazione delle chiavi come scelta di least privilege.
+%
+% TODO: Descrivere la generazione della coppia (PU_SA, PR_SA) da parte del SA per
+% la firma dei certificati pseudonimi.
+
+\subsubsection{Distribuzione delle chiavi pubbliche tramite PKI}
+\label{subsubsec:wp2_pki}
+% TODO: Spiegare che PU_ele, PU_AE e PU_SA sono certificate dalla CA d'Ateneo tramite
+% certificati X.509 e pubblicate prima dell'apertura delle urne.
+%
+% TODO: Collegare la stessa PKI anche all'autenticazione dei server nei canali TLS.
+
+\subsubsection{Blocco di testa dell'urna}
+\label{subsubsec:wp2_blocco_testa}
+% TODO: Presentare il record iniziale dell'urna:
+% Params = { id_ele, PU_ele, N, lista_candidati, t_apertura, t_chiusura }.
+%
+% TODO: Specificare che Params viene firmato dall'AE e costituisce Record_0 della
+% hash chain.
+
+\subsection{Fase 1 --- Autenticazione ed emissione del certificato pseudonimo}
 \label{subsec:fase_autenticazione}
-% TODO: Descrivere la generazione locale della coppia effimera e monouso (PU_v, PR_v) sul client, prima di qualsiasi contatto con il SA, evidenziando che PR_v rimane confinata nella memoria volatile del dispositivo.
-% TODO: Descrivere l'instaurazione del canale TLS con il SA (validazione del certificato del server contro la CA d'Ateneo) e l'autenticazione dell'utente tramite credenziali istituzionali.
-% TODO: Dettagliare i due controlli eseguiti dal SA prima del rilascio: (a) presenza del nominativo nell'elenco degli aventi diritto per id_ele, (b) interrogazione del registro interno anti-doppio-voto indicizzato per identità reale.
-% TODO: Mostrare la struttura del Certificato Pseudonimo: C_p = { PU_v, id_ele, t_finestra, Sign_{PR_SA}(H(PU_v || id_ele || t_finestra)) }.
-% TODO: Giustificare l'uso di t_finestra (granularità grossolana, es. ora del giorno arrotondata) al posto di un timestamp preciso: riduce il canale latente di linkability temporale tra l'emissione del certificato e la successiva sottomissione della scheda all'AE, mitigando attacchi di correlazione passiva.
-% TODO: Sottolineare che il SA aggiorna il proprio registro interno e non trasmette mai tali dati sensibili all'AE, preservando l'isolamento informativo.
+\label{subsec:wp2_fase_autenticazione}
 
-\subsection{Fase 2 --- Costruzione e Trasmissione della Scheda di Voto}
+\subsubsection{Generazione della coppia effimera lato elettore}
+\label{subsubsec:wp2_chiave_effimera}
+% TODO: Descrivere la generazione locale di (PU_v, PR_v), priva di informazioni
+% identificative e valida solo per la sessione di voto.
+%
+% TODO: Precisare che PR_v non lascia il dispositivo dell'elettore e verrà cancellata
+% dopo la ricezione della ricevuta R.
+
+\subsubsection{Autenticazione presso il SA}
+\label{subsubsec:wp2_autenticazione_sa}
+% TODO: Descrivere il canale TLS verso il SA e l'autenticazione con credenziali
+% istituzionali.
+%
+% TODO: Indicare i due controlli del SA: appartenenza agli aventi diritto e assenza
+% di un certificato pseudonimo già emesso per id_ele.
+
+\subsubsection{Certificato pseudonimo}
+\label{subsubsec:wp2_certificato_pseudonimo}
+% TODO: Mostrare la struttura:
+% C_p = { PU_v, id_ele, t_finestra, Sign_{PR_SA}(H(PU_v || id_ele || t_finestra)) }.
+%
+% TODO: Spiegare che C_p attesta l'abilitazione al voto senza includere l'identità
+% reale dell'elettore.
+%
+% TODO: Motivare t_finestra come timestamp grossolano utile a ridurre la correlazione
+% temporale tra emissione del certificato e arrivo della scheda all'AE.
+
+\subsection{Fase 2 --- Costruzione e trasmissione della scheda}
 \label{subsec:fase_costruzione_scheda}
-% TODO: Descrivere la codifica scalare della preferenza dell'elettore: i \in {1, ..., N}. Giustificare esplicitamente che la codifica scalare è la scelta corretta data l'assenza di proprietà omomorfiche in RSA-OAEP. Specificare che una codifica vettoriale (one-hot) sarebbe utile solo in presenza di cifratura omomorfica additiva (es. Paillier), non trattata nel corso, e che in questo scenario la validazione di conformità si riduce al controllo numerico 1 <= i <= N.
-% TODO: Descrivere l'operazione di cifratura: C = RSA-OAEP-Enc(PU_ele, i ; r). Giustificare l'indispensabilità del padding OAEP per garantire la CPA-security su un dominio di messaggi piccolo e noto: senza l'apporto del fattore di randomizzazione r, un avversario potrebbe cifrare preventivamente le N opzioni con la chiave pubblica PU_ele e confrontarle con C per identificare il voto.
-% TODO: Spiegare la generazione del nonce \eta a 256 bit (\eta <-$ {0,1}^256) ed esplicitare il suo duplice ruolo nel protocollo:
-%       - Ruolo PRIMARIO: agire come segreto condiviso esclusivo tra elettore e urna per il calcolo del fingerprint F = H(C || \eta), abilitando la verifica individuale receipt-free (senza \eta nessun terzo può collegare un record F_j all'identità di un elettore).
-%       - Ruolo SECONDARIO: fungere da identificatore di freschezza del pacchetto a livello applicativo per rafforzare la difesa anti-replay, operando in modo complementare al controllo di unicità di PU_v eseguito dall'AE.
-% TODO: Mostrare la composizione del pacchetto e l'applicazione dello schema Encrypt-then-Sign: \sigma = Sign_{PR_v}(H(C || C_p || \eta || id_ele)) e M = (C, C_p, \eta, id_ele, \sigma).
-% TODO: Argomentare la scelta di Encrypt-then-Sign: la firma copre il ciphertext, assicurando che qualsiasi tentativo di alterazione o sostituzione di C in transito da parte di un MitM invalidi la firma \sigma.
-% TODO: Sottolineare che \eta viaggia in chiaro all'interno del pacchetto M, ma la sua confidenzialità è interamente delegata al canale TLS sottostante (richiamo a \S~\ref{sec:panoramica_architettura}).
+\label{subsec:wp2_fase_costruzione_scheda}
 
-\subsection{Fase 3 --- Ricezione, Validazione e Rilascio della Ricevuta}
+\subsubsection{Codifica scalare del voto}
+\label{subsubsec:wp2_codifica_voto}
+% TODO: Definire la preferenza come i in {1, ..., N}.
+%
+% TODO: Motivare la codifica scalare: RSA-OAEP non è omomorfico, quindi la codifica
+% one-hot non dà vantaggi nel protocollo concreto. La validazione diventa il controllo
+% 1 <= i <= N.
+
+\subsubsection{Cifratura con RSA-OAEP}
+\label{subsubsec:wp2_rsa_oaep}
+% TODO: Presentare C = RSA-OAEP-Enc(PU_ele, i; r).
+%
+% TODO: Spiegare perché OAEP è necessario su un dominio di messaggi piccolo e noto:
+% senza randomizzazione, un avversario potrebbe cifrare tutte le opzioni e confrontarle.
+%
+% TODO: Chiarire che r resta noto solo all'elettore e contribuisce alla non rivelazione
+% del voto rispetto a terzi che osservano il ciphertext.
+
+\subsubsection{Nonce eta e fingerprint della scheda}
+\label{subsubsec:wp2_nonce_fingerprint}
+% TODO: Descrivere la generazione di eta a 256 bit.
+%
+% TODO: Aggiornare la formula della verifica individuale:
+% K = H(C), F = H(K || eta).
+%
+% TODO: Spiegare il doppio ruolo di eta:
+% (i) segreto necessario a individuare il proprio F_j senza produrre una ricevuta
+%     rivelante;
+% (ii) identificatore di freschezza complementare al controllo di unicità di PU_v.
+%
+% TODO: Usare la terminologia "assenza di ricevuta rivelante", non receipt-freeness
+% piena.
+
+\subsubsection{Pacchetto di voto ed Encrypt-then-Sign}
+\label{subsubsec:wp2_encrypt_then_sign}
+% TODO: Presentare:
+% sigma = Sign_{PR_v}(H(C || C_p || eta || id_ele));
+% M = (C, C_p, eta, id_ele, sigma).
+%
+% TODO: Spiegare che la firma copre il ciphertext C, non il plaintext i, e rende
+% rilevabile qualsiasi sostituzione del ciphertext in transito.
+%
+% TODO: Chiarire che con Sign si intende RSA hash-and-sign, non RSA textbook.
+%
+% TODO: Ribadire che eta viaggia nel pacchetto M, ma è protetto in transito da TLS.
+
+\subsection{Fase 3 --- Ricezione, validazione e rilascio della ricevuta}
 \label{subsec:fase_ricezione}
-% TODO: Descrivere la ricezione del pacchetto M via TLS da parte dell'AE.
-% TODO: Rappresentare in modo formale, tramite un blocco di pseudocodice (ambiente algorithm), i 4 controlli atomici e sequenziali eseguiti dall'AE (fallimento = rigetto immediato):
-%       1. Verifica della firma del SA su C_p tramite la chiave pubblica PU_SA.
-%       2. Verifica di unicità dell'identità pseudonima: PU_v non presente nel registro delle chiavi effimere già accettate dall'AE.
-%       3. Controllo anti-replay sul nonce: \eta non presente nel registro dei nonce già spesi.
-%       4. Verifica della firma sul pacchetto: convalida di \sigma tramite la chiave pubblica effimera PU_v estratta da C_p.
-% TODO: Descrivere il Passo 5 (Accettazione e Committing): assegnazione della posizione progressiva j nell'urna, calcolo del fingerprint F_j = H(C_j || \eta_j), generazione della ricevuta firmata R = Sign_{PR_AE}(H(F_j || j || id_ele)) e trasmissione di R al client via TLS.
-% TODO: Dettagliare l'azione tassativa eseguita dal client all'atto della ricezione e convalida di R: la cancellazione immediata e sicura della chiave privata effimera PR_v dalla memoria locale. Argomentare che, privato di PR_v, l'elettore perde la capacità matematica di firmare ex-post dichiarazioni che dimostrino la paternità del voto a un coercitore (mitigazione della coercizione retroattiva).
-% TODO: Specificare che il nonce \eta_j viene memorizzato dall'AE per la gestione dei servizi di verifica ma viene tassativamente omesso dal record pubblico dell'urna, rimanendo un segreto condiviso.
+\label{subsec:wp2_fase_ricezione}
 
-\section{Architettura dell'Urna Pubblica: Struttura Ibrida}
+\subsubsection{Controlli dell'AE}
+\label{subsubsec:wp2_controlli_ae}
+% TODO: Inserire pseudocodice con i quattro controlli sequenziali:
+% 1. verifica firma SA su C_p;
+% 2. unicità di PU_v nel Registro_Effimeri_AE;
+% 3. anti-replay su eta nel Registro_Nonce_AE;
+% 4. verifica sigma tramite PU_v.
+%
+% TODO: Specificare che il fallimento di uno qualunque dei controlli causa il rigetto
+% immediato del pacchetto.
+
+\subsubsection{Commitment, fingerprint e ricevuta}
+\label{subsubsec:wp2_commitment_ricevuta}
+% TODO: Aggiornare il passo di accettazione:
+% K_j = H(C_j);
+% F_j = H(K_j || eta_j);
+% R = Sign_{PR_AE}(H(K_j || F_j || j || id_ele)).
+%
+% TODO: Specificare che j è l'indice progressivo assegnato dall'AE e che R viene
+% inviata all'elettore via TLS.
+
+\subsubsection{Separazione tra archivio interno e urna pubblica}
+\label{subsubsec:wp2_archivio_vs_urna}
+% TODO: Inserire una tabella o blocco descrittivo:
+% Archivio interno AE: C_j, C_p, eta_j, sigma, PU_v, stato della scheda.
+% Urna pubblica: j, K_j, F_j, H(Record_{j-1}), Sign_AE(...).
+%
+% TODO: Chiarire che C_j serve allo scrutinio ma non viene pubblicato; K_j è il
+% commitment pubblico al ciphertext.
+
+\subsubsection{Cancellazione della chiave effimera}
+\label{subsubsec:wp2_cancellazione_prv}
+% TODO: Descrivere la cancellazione immediata di PR_v dopo la verifica della ricevuta.
+%
+% TODO: Collegare la cancellazione alla mitigazione della coercizione retroattiva:
+% l'elettore non può produrre nuove firme che dimostrino la paternità del pacchetto.
+%
+% TODO: Specificare che l'elettore conserva quanto serve alla verifica individuale:
+% C, eta, R e l'indice j ricavabile da R; K_j è ricalcolabile come H(C) o recuperabile
+% dal record pubblico.
+
+\section{Architettura dell'urna pubblica: struttura ibrida}
 \label{sec:architettura_urna}
-% TODO: Introdurre le motivazioni ingegneristiche dietro l'adozione di una topologia ibrida ad Hash Chain + Merkle Tree, richiamando formalmente i concetti di hash pointer, tamper-evident log e proof of membership affrontati nella Lezione 07 del corso.
-% TODO: Distinguere nettamente i ruoli delle due strutture: la hash chain assolve la funzione di log storico persistente e append-only per la verifica universale globale; il Merkle Tree funge da indice di snapshot rigenerato periodicamente per consentire verifiche individuali efficienti.
+% Obiettivo della sezione: descrivere come vengono pubblicati e verificati i record
+% dell'urna.
+%
+% TODO: Introdurre la combinazione hash chain + Merkle Tree, richiamando hash pointer,
+% tamper-evident log e proof of membership.
+%
+% TODO: Separare chiaramente i ruoli: hash chain come log storico; Merkle Tree come
+% indice efficiente per la verifica individuale.
 
-\subsection{L'Append-Only Log basato su Hash Chain}
+\subsection{Append-only log basato su hash chain}
 \label{subsec:hash_chain}
-% TODO: Formalizzare la struttura crittografica del record j-esimo: Record_j = { j, F_j, H(Record_{j-1}), Sign_{PR_AE}(H(j || F_j || H(Record_{j-1}))) }, dove Record_0 coincide con il Blocco di Testa Params.
-% TODO: Spiegare come il collegamento sequenziale tramite hash pointer, unito alla firma digitale dell'AE su ciascun blocco, renda computazionalmente impossibile qualsiasi alterazione, rimozione o inversione retroattiva dei voti senza invalidare l'intera catena.
-% TODO: Sottolineare e motivare la scelta di inserire nell'urna pubblica soltanto il fingerprint F_j e non il ciphertext C_j in chiaro o il nonce \eta_j: F_j è sufficiente per l'audit di membership, mentre la mancata pubblicazione di C_j isola i dati da attacchi crittanalitici massivi a lungo termine qualora PR_ele venisse compromessa in futuro.
+\label{subsec:wp2_hash_chain}
+% TODO: Aggiornare la struttura del record pubblico:
+% Record_j = { j, K_j, F_j, H(Record_{j-1}), Sign_{PR_AE}(H(j || K_j || F_j || H(Record_{j-1}))) }.
+%
+% TODO: Spiegare che Record_0 è il blocco di testa Params.
+%
+% TODO: Descrivere perché hash pointer e firme rendono rilevabili modifiche retroattive.
 
-\subsection{L'Indice Efficiente basato su Merkle Tree}
+\subsubsection{Ruolo del commitment pubblico \(K_j\)}
+\label{subsubsec:wp2_ruolo_kj}
+% TODO: Spiegare che K_j = H(C_j) non rivela C_j, ma impegna pubblicamente l'AE al
+% ciphertext ricevuto.
+%
+% TODO: Specificare che K_j abilita controlli procedurali o audit: un revisore con
+% accesso a C_j può verificare K_j = H(C_j).
+%
+% TODO: Non presentare K_j come soluzione a VER-2 piena; è un rafforzamento strutturale.
+
+\subsubsection{Pubblicazione per finestre}
+\label{subsubsec:wp2_pubblicazione_finestre}
+% TODO: Dichiarare che i record non vengono pubblicati in tempo reale uno per uno, ma
+% per finestre temporali coerenti con t_finestra.
+%
+% TODO: Motivare la scelta come mitigazione della correlazione temporale SA--AE.
+
+\subsection{Indice efficiente basato su Merkle Tree}
 \label{subsec:merkle_tree}
-% TODO: Descrivere l'indicizzazione parallela dei fingerprint attivi {F_1, ..., F_k} all'interno di una struttura ad albero binario di Merkle.
-% TODO: Specificare che la Merkle Root viene pubblicata periodicamente dall'AE e che la radice finale viene sigillata al momento della chiusura delle urne.
-% TODO: Argomentare l'efficienza algoritmica: il singolo elettore può validare la presenza del proprio fingerprint scaricando esclusivamente la Merkle Proof (cammino di autenticazione di lunghezza log_2 k) anziché processare linearmente l'intero log dell'hash chain, ottimizzando l'overhead di banda e di calcolo lato client.
+\label{subsec:wp2_merkle_tree}
+% TODO: Spiegare che i fingerprint F_j sono indicizzati in un Merkle Tree.
+%
+% TODO: Specificare che la Merkle Root viene pubblicata alla fine di ogni finestra e
+% definitivamente alla chiusura delle urne.
+%
+% TODO: Distinguere Verificatore Universale (scarica la hash chain) ed elettore
+% individuale (scarica solo la proof di membership relativa a F_j).
 
-\section{Chiusura delle Urne, Scrutinio e Pubblicazione}
+\subsection{Scelta progettuale: architettura centralizzata vs blockchain}
+\label{subsec:wp2_centralizzata_vs_blockchain}
+% TODO: Spiegare che il design usa primitive tipiche della blockchain, ma senza adottare
+% una blockchain completa.
+%
+% TODO: Argomentare i quattro motivi:
+% 1. presenza di una trust authority istituzionale;
+% 2. efficienza e latenza;
+% 3. la blockchain non risolve lo scrutinio black-box;
+% 4. lo smart contract non aggiunge valore crittografico rispetto alla hash chain firmata.
+%
+% TODO: Lasciare la blockchain come possibile direzione futura in scenari trustless o
+% con decifratura distribuita, ma non come scelta del WP2.
+
+\section{Chiusura delle urne, scrutinio e pubblicazione}
 \label{sec:scrutinio_pubblicazione}
-% TODO: Descrivere il congelamento della hash chain al tempo t_chiusura mediante la pubblicazione da adm parte dell'AE di un record di chiusura firmato contenente la Merkle Root definitiva e il numero totale di schede raccolte (k_totale).
-% TODO: Delineare la procedura di decifratura sequenziale condotta dall'AE recuperando la chiave privata dell'elezione PR_ele: i_j = RSA-OAEP-Dec(PR_ele, C_j) per ogni record j.
-% TODO: Spiegare l'algoritmo di controllo conformità sul plaintext decifrato: verifica del bound intero 1 <= i_j <= N. Specificare che le schede non conformi (malformate o nulle) non vengono eliminate per preservare la natura append-only dell'urna, ma vengono marcate come "invalide" tramite la pubblicazione di un record di notifica firmato dall'AE associato al fingerprint F_j.
-% TODO: Mostrare la struttura del documento finale dei risultati: Doc_finale = { Risultato[1..N], k_totale, k_conformi, k_invalide, Merkle_Root_finale, Sign_{PR_AE}(H(Risultato || k_totale || k_conformi || Merkle_Root_finale)) }.
-% TODO: Sottolineare che i singoli plaintext individuali i_j decifrati dall'AE non vengono mai pubblicati, limitando la visibilità al solo dato aggregato finale.
 
-\subsection{Dichiarazione del Vincolo Strutturale \texttt{[SEC-1]}}
+\subsection{Chiusura e congelamento dell'urna}
+\label{subsec:wp2_chiusura}
+% TODO: Descrivere il record di chiusura firmato dall'AE, contenente Merkle Root finale
+% e numero totale di schede.
+%
+% TODO: Specificare che dopo t_chiusura non vengono accettati nuovi record.
+
+\subsection{Decifratura e validazione delle schede}
+\label{subsec:wp2_decifratura_validazione}
+% TODO: Specificare che l'AE recupera C_j dall'archivio interno, non dall'urna pubblica.
+%
+% TODO: Presentare i_j = RSA-OAEP-Dec(PR_ele, C_j).
+%
+% TODO: Applicare il controllo di conformità 1 <= i_j <= N.
+%
+% TODO: Le schede non conformi vengono marcate come invalide con record firmato e non
+% eliminate dall'urna.
+
+\subsection{Calcolo e pubblicazione del risultato}
+\label{subsec:wp2_calcolo_risultato}
+% TODO: Presentare Risultato[k] = |{j : i_j = k}|.
+%
+% TODO: Descrivere Doc_finale con Risultato, k_totale, k_conformi, k_invalide,
+% Merkle_Root_finale e firma AE.
+%
+% TODO: Specificare che i singoli plaintext i_j non vengono pubblicati.
+
+\subsection{Dichiarazione del vincolo strutturale \texttt{[SEC-1]}}
 \label{subsec:limite_sec1}
-% TODO: Dichiarare in modo conciso il vincolo ingegneristico: la formulazione ideale di SEC-1 richiede che nessun attore, inclusa l'AE, acceda alle schede in chiaro. Questo obiettivo non è pienamente realizzabile con gli strumenti del corso poiché RSA-OAEP non è omomorfico e l'AE deve necessariamente decifrare i singoli ciphertext per calcolare i totali.
-% TODO: Elencare gli strumenti crittografici avanzati che risolverebbero nativamente il vincolo (specificando che NON sono trattati nel corso e non richiesti): schemi di cifratura omomorfica additiva (Paillier, ElGamal exponential), tecniche di decifratura a soglia (threshold decryption) e mix-net verificabili.
-% TODO: Sintetizzare ciò che il design garantisce: SEC-1 è pienamente soddisfatta in transito (TLS) e in conservazione (crittogrammi protetti nell'urna con PR_ele segreta); la visibilità in chiaro è limitata alla sola fase di scrutinio offline e i plaintext individuali sono esclusi dal Doc_finale.
-% TODO: Inserire il rinvio esplicito: "L'analisi del rischio residuo associato a questo vincolo strutturale, l'efficacia delle mitigazioni procedurali (presenza della commissione, osservatori indipendenti) e le condizioni di propagazione del rischio sono rimesse all'analisi di sicurezza del WP3."
+\label{subsec:wp2_limite_sec1}
+% TODO: Dichiarare che SEC-1 piena richiederebbe che nemmeno l'AE possa leggere le
+% singole schede, ma RSA-OAEP non è omomorfico e quindi l'AE deve decifrare C_j.
+%
+% TODO: Citare come strumenti non trattati: cifratura omomorfica additiva, decifratura
+% a soglia, mix-net verificabile.
+%
+% TODO: Specificare quanto è realizzato: segretezza in transito tramite TLS, segretezza
+% in conservazione pubblica perché l'urna contiene K_j e F_j ma non C_j, accesso ai
+% voti in chiaro limitato alla fase di scrutinio e all'AE.
 
-\section{Meccanismi di Verifica Funzionale}
+\section{Meccanismi di verifica}
 \label{sec:meccanismi_verifica}
 
-\subsection{Verifica Individuale \texttt{[VER-1]}}
+\subsection{Verifica individuale \texttt{[VER-1]}}
 \label{subsec:verifica_individuale}
-% TODO: Descrivere la procedura deterministica eseguita localmente dall'elettore: a partire dai dati memorizzati (C, \eta, R), calcolare il fingerprint F = H(C || \eta), richiedere la Merkle Proof per F all'AE e convalidarla matematicamente contro la Merkle Root finale.
-% TODO: Specificare la gestione degli esiti: se F è presente e non marcato come scartato, l'elettore ha la certezza dell'inclusione conforme; se F risulta marcato come scartato, l'elettore rileva l'anomalia e può attivare un'ispezione procedurale esibendo la ricevuta R firmata dall'AE.
-% TODO: Argomentare la coerenza architetturale con la Receipt-Freeness (SEC-3): \eta è un segreto non esportabile custodito dal solo elettore (impossibile per terzi calcolare H(C || \eta)), la ricevuta R non contiene riferimenti al plaintext del voto e la chiave privata PR_v è stata distrutta (impossibilità di firmare nuove prove di paternità ex-post).
+\label{subsec:wp2_verifica_individuale}
+% TODO: Descrivere i passi dell'elettore:
+% 1. calcola K = H(C);
+% 2. calcola F = H(K || eta);
+% 3. scarica la Merkle Proof per F e verifica la root finale;
+% 4. scarica Record_j e verifica K_j = K.
+%
+% TODO: Spiegare che la ricevuta R lega K_j, F_j, j e id_ele tramite firma AE.
+%
+% TODO: Chiarire che la proprietà è "assenza di ricevuta rivelante rilasciata dal
+% sistema", non impossibilità assoluta di costruire prove esterne.
+%
+% TODO: Specificare il caso di scheda scartata: l'elettore può esibire R per attivare
+% una verifica procedurale.
 
-\subsection{Verifica Universale \texttt{[VER-2]}}
+\subsection{Verifica universale \texttt{[VER-2]}}
 \label{subsec:verifica_universale}
-% TODO: Elencare i controlli strutturali e pubblici che qualsiasi entità o Verificatore Pubblico può compiere scaricando i dati dell'urna:
-%       - Verifica della consistenza della Merkle Root finale ricalcolando l'albero a partire dai fingerprint della hash chain.
-%       - Convalida di ogni firma digitale dei record dell'urna tramite la chiave pubblica PU_AE.
-%       - Ispezione lineare dell'integrità dei puntatori hash H(Record_{j-1}) lungo tutta la hash chain.
-%       - Controllo di consistenza aritmetica dei contatori pubblicati: k_conformi + k_invalide == k_totale.
-%       - Convalida della firma digitale apposta sul Doc_finale tramite PU_AE.
+\label{subsec:wp2_verifica_universale}
+% TODO: Elencare i controlli pubblici:
+% - consistenza della Merkle Root con i fingerprint F_j;
+% - firme valide su tutti i record;
+% - hash pointer corretti;
+% - coerenza k_conformi + k_invalide = k_totale;
+% - firma valida su Doc_finale.
+%
+% TODO: Aggiungere il caso auditor: se un revisore ottiene accesso ai ciphertext C_j,
+% può verificare K_j = H(C_j) e quindi la coerenza tra archivio interno e urna pubblica.
 
-\subsection{Dichiarazione del Vincolo Strutturale \texttt{[VER-2]}}
+\subsection{Dichiarazione del vincolo strutturale \texttt{[VER-2]}}
 \label{subsec:limite_ver2}
-% TODO: Dichiarare in modo conciso il vincolo ingegneristico: la formulazione ideale di VER-2 richiede la verifica matematica della correttezza del risultato a partire dai dati pubblici. Il protocollo implementa una verificabilità universale di tipo esclusivamente STRUTTURALE (integrità della bacheca e coerenza dei totali) ma non del calcolo, poiché la decifratura centralizzata in capo all'AE agisce come una black-box crittografica non ispezionabile dall'esterno.
-% TODO: Menzionare gli strumenti avanzati che consentirebbero la verifica matematica dello scrutinio (NON trattati nel corso): Zero-Knowledge Proofs (ZKP) di corretta decifratura, tally omomorfico sull'aggregato cifrato e mix-net con prove di permutazione.
-% TODO: Evidenziare la mitigazione nativa introdotta nel design: l'elettore può rilevare un eventuale scarto fraudolento o un'omissione della propria scheda tramite la verifica individuale, esibendo R per innescare un audit ispettivo fisico.
-% TODO: Inserire il rinvio esplicito: "L'analisi della robustezza di questa mitigazione rispetto al modello di minaccia, la quantificazione del rischio di manipolazione del tally e la dipendenza dall'onestà dell'AE in fase di computazione sono rimesse alla trattazione del WP3."
+\label{subsec:wp2_limite_ver2}
+% TODO: Dichiarare che il protocollo realizza una verificabilità universale strutturale,
+% non una verifica matematica piena del conteggio.
+%
+% TODO: Spiegare che resta non verificabile pubblicamente se l'AE abbia decifrato e
+% conteggiato correttamente ogni C_j.
+%
+% TODO: Citare strumenti non trattati che servirebbero per VER-2 piena: ZKP di corretta
+% decifratura, tally omomorfico, mix-net verificabile.
+%
+% TODO: Evidenziare le due mitigazioni disponibili: verifica individuale con R e audit
+% procedurale basato su K_j = H(C_j), se i ciphertext vengono resi disponibili ai revisori.
 
-\section{Riepilogo Funzionale delle Proprietà di Sicurezza}
+\section{Riepilogo funzionale delle proprietà di sicurezza}
 \label{sec:riepilogo_proprieta}
-% TODO: Inserire una tabella di tracciabilità progettuale pura (ambiente table + tabular) per mappare la copertura dei requisiti del WP1 all'interno del design del WP2.
-% TODO: Configurare le colonne della tabella: Proprietà del WP1 | Stato Realizzato dal Design | Meccanismo Tecnico del WP2 | Assunzione o Vincolo di Riferimento.
-% TODO: Popolare le 12 righe corrispondenti alle micro-proprietà formalizzate nel modello (AUTH-1, AUTH-2, UNIQ-1, UNIQ-2, INT-1, INT-2, INT-3, SEC-1, SEC-2, SEC-3, VER-1, VER-2).
-% TODO: Esplicitare che la colonna "Stato Realizzato" descrive l'obiettivo architetturale nominale del design ("Piena", "Condizionale", "Parziale strutturale") in assenza di compromissioni. L'ultima colonna deve legare la proprietà alle assunzioni del WP1 (es. "Assunzione 1: non-collusione SA/AE") o ai vincoli di capitolo (\S~\ref{subsec:limite_sec1}, \S~\ref{subsec:limite_ver2}).
-% TODO: Inserire una nota introduttiva testuale che specifichi: la tabella documenta la mappatura funzionale dei meccanismi del protocollo; l'analisi della loro effettiva tenuta e la valutazione della resilienza in presenza di avversari attivi o passivi costituiscono l'oggetto esclusivo del WP3.
+% TODO: Inserire una tabella di tracciabilità con colonne:
+% Proprietà | Stato realizzato | Meccanismo del protocollo | Assunzione/Vincolo.
+%
+% TODO: Aggiornare le righe alla versione con K_j:
+% AUTH-1, AUTH-2, UNIQ-1, UNIQ-2, INT-1, INT-2, INT-3,
+% SEC-1, SEC-2, SEC-3, VER-1, VER-2.
+%
+% TODO: Usare per SEC-3 la formula "assenza di ricevuta rivelante" e per VER-2 la
+% formula "strutturale".
+%
+% TODO: Specificare che la tabella non è ancora analisi di sicurezza: la resilienza
+% effettiva rispetto agli attaccanti del WP1 sarà discussa in WP3.
 
-\section{Scelte Progettuali e Compromessi Architetturali}
+\section{Analisi critica delle scelte progettuali}
 \label{sec:scelte_progettuali}
 
-\subsection{Modello One-Shot Irrevocabile}
+\subsection{Modello one-shot irrevocabile}
 \label{subsec:compromesso_irrevocabilita}
-% TODO: Richiamare l'Assunzione 4 del WP1 (ambiente privato e assenza di coercizione fisica) e l'analisi sulla revocabilità del voto.
-% TODO: Argomentare le ragioni ingegneristiche e i profondi conflitti strutturali che l'introduzione della sostituibilità del voto comporterebbe nel design:
-%       (a) imporrebbe all'infrastruttura di memorizzazione dell'AE il mantenimento di un identificativo persistente per associare le diverse transazioni dello stesso utente, indebolendo drasticamente lo pseudo-anonimato (SEC-2);
-%       (b) richiederebbe l'esibizione di una prova di paternità crittografica del voto antecedente per autorizzarne la sovrascrittura, entrando in conflitto logico insanabile con la distruzione immediata della chiave privata effimera PR_v, introdotta a tutela della privacy elettorale (SEC-3);
-%       (c) eleverebbe la complessità algoritmica delle procedure di verifica individuale e universale, imponendo la gestione della cronologia e della purificazione dei log storici.
-% TODO: Contestualizzare il trade-off accettato: per lo scenario d'uso universitario di riferimento il rischio di coercizione organizzata o voto di scambio sistematico è considerato accettabile a fronte dei benefici in termini di linearità, efficienza globale e robustezza dello pseudo-anonimato.
+\label{subsec:wp2_one_shot_irrevocabile}
+% TODO: Dichiarare che la scelta di non revoca/non sostituzione del voto è definitiva.
+%
+% TODO: Argomentare i tre conflitti della sostituzione:
+% 1. richiederebbe un identificativo persistente;
+% 2. entrerebbe in conflitto con la cancellazione di PR_v;
+% 3. complicherebbe VER-1 e VER-2.
+%
+% TODO: Dichiarare il rischio residuo di coercizione pre-invio come accettato nel modello.
 
-\subsection{Esclusione dell'Infrastruttura Blockchain}
+\subsection{Architettura centralizzata vs blockchain}
 \label{subsec:compromesso_blockchain}
-% TODO: Riconoscere che l'architettura adottata (hash chain firmata + Merkle Tree) attinge ampiamente alle medesime primitive crittografiche che costituiscono i blocchi costruttivi di una blockchain (hash pointer, tamper-evident log, Merkle root, firme digitali - Lezione 07).
-% TODO: Articolare l'analisi critica della scelta centralizzata basandosi sui vincoli del corso tramite 4 motivi concreti:
-%       1. Presenza di una Trust Authority istituzionale: il contesto elettorale accademico opera già all'interno di un perimetro di accountability e controllo procedurale rigido esercitato dall'Ateneo tramite commissioni e osservatori fisici. La necessità di un registro totalmente decentralizzato e trustless non riflette il problema reale di questo scenario.
-%       2. Vincolo di efficienza e scalabilità: il trilemma della blockchain evidenzia l'imponente overhead computazionale e di rete introdotto dai meccanismi di consenso distribuito. Per consultazioni concentrate in finestre temporali ristrette, le latenze non deterministiche della blockchain violerebbero il vincolo stringente di efficienza stabilito fin da WP1.
-%       3. Incompetenza della blockchain sul limite dello scrutinio: l'adozione di un registro distribuito risolverebbe l'immutabilità della bacheca (INT-3) senza delegare la fiducia a un singolo nodo in scrittura, ma lascerebbe del tutto insoluto il problema della verificabilità dello scrutinio (VER-2). Finché la chiave di decifratura PR_ele è centralizzata nelle mani dell'AE, il calcolo del tally rimane un'operazione opaca, indipendentemente dalla natura decentralizzata del database in cui risiedono i crittogrammi.
-%       4. Ruolo ridotto dello Smart Contract: uno smart contract, operando in un ambiente strettamente deterministico, non aggiungerebbe alcun valore crittografico al protocollo. La randomizzazione r per il padding OAEP e il nonce \eta sono necessariamente generati client-side. Il ruolo di un contratto intelligente si ridurrebbe a quello di un mero validatore sintattico di firme e di un registro append-only, funzione già svolta in modo nativo ed economico dalla hash chain firmata centralmente, senza l'overhead energetico e computazionale di una DLT.
+\label{subsec:wp2_esclusione_blockchain}
+% TODO: Rinviare alla Sezione~\ref{subsec:wp2_centralizzata_vs_blockchain} e riassumere
+% le ragioni della scelta: trust authority, efficienza, scrutinio black-box, scarso valore
+% aggiunto dello smart contract.
 
-\section{Strumenti del Corso Utilizzati e Considerati}
+\section{Strumenti del corso utilizzati e considerati}
 \label{sec:strumenti_corso}
 
-\subsection{Strumenti Adottati}
+\subsection{Strumenti adottati}
 \label{subsec:strumenti_adottati}
-% TODO: Elencare in modo schematico le primitive del programma d'esame applicate nella specifica, mappandole al rispettivo ruolo architetturale nel protocollo:
-%       - Crittografia a chiave pubblica RSA (Lezione 05): Generazione delle coppie di chiavi asimmetriche a lungo termine (AE, SA) ed effimere (elettore).
-%       - RSA con padding OAEP (Lezione 05): Cifratura della preferenza scalare lato client per garantire la CPA-security su domini di messaggi ridotti e noti.
-%       - Firma digitale RSA hash-and-sign (Lezione 05): Autenticazione dei certificati pseudonimi (SA), firma del pacchetto di voto (elettore) e validazione dei record e delle ricevute (AE).
-%       - Funzione hash crittografica SHA-256 (Lezione 04): Primitiva fondamentale per il calcolo dei fingerprint delle schede F_j, per i puntatori dell'hash chain e per gli schemi di firma.
-%       - Struttura dati Merkle Tree (Lezioni 04 e 07): Indicizzazione parallela dei fingerprint per il rilascio di prove di membership a efficienza logaritmica O(log k).
-%       - Hash Chain / Tamper-Evident Log (Lezioni 04 e 07): Struttura dati principale dell'urna per garantire l'immutabilità sequenziale storica del registro di voto.
-%       - Infrastruttura a chiave pubblica (PKI) e certificati digitali X.509 (Lezione 06): Distribuzione autentica delle chiavi pubbliche istituzionali e fondamento concettuale per la modellazione del certificato pseudonimo C_p.
-%       - Protocollo Transport Layer Security - TLS (Lezione 06): Incapsulamento del canale di trasporto per garantire la confidenzialità dei metadati e mitigare attacchi di correlazione temporale.
-%       - Schema Encrypt-then-Sign (Lezione 04): Composizione crittografica del pacchetto di voto M per garantire l'integrità del testo cifrato in transito.
+\label{subsec:wp2_strumenti_adottati}
+% TODO: Elencare e mappare alle componenti del protocollo:
+% - RSA;
+% - RSA-OAEP;
+% - firma digitale RSA hash-and-sign;
+% - SHA-256;
+% - Merkle Tree;
+% - hash chain / tamper-evident log;
+% - PKI e certificati X.509;
+% - TLS;
+% - Encrypt-then-Sign.
+%
+% TODO: Nella voce firma digitale, ribadire che Sign non indica firma RSA textbook.
+%
+% TODO: Nella voce TLS, ribadire che TLS protegge i contenuti ma non elimina del tutto
+% i canali laterali di rete; la mitigazione è completata da t_finestra e pubblicazione
+% per finestre.
 
-\subsection{Strumenti Considerati e Non Adottati}
+\subsection{Strumenti considerati e non adottati}
 \label{subsec:strumenti_non_adottati}
-% TODO: Documentare formalmente l'esclusione motivata delle altre primitive trattate nel corso, a difesa delle scelte di progettazione:
-%       - Cifratura simmetrica AES (Lezione 03): Non adottata in quanto il payload del pacchetto applicativo è di dimensioni ridotte (un singolo intero e metadati fissi) e non giustifica l'introduzione di chiavi simmetriche dedicate; le proprietà di confidenzialità della trasmissione sono già interamente assorbite da TLS sotto la veste applicativa.
-%       - Key Distribution Center - KDC e protocollo Needham-Schroeder (Lezione 06): Scartati poiché non idonei all'architettura aperta e distribuita del sistema; richiedono la condivisione preventiva di una master key segreta tra ciascun utente e il server centrale, introducendo un single point of failure imponente e problemi complessi di revoca. La combinazione di PKI e canali TLS rappresenta la soluzione ottimale per il contesto d'uso.
-%       - Protocollo di Key Exchange Diffie-Hellman (Lezione 06): Non implementato direttamente a livello applicativo, poiché la negoziazione delle chiavi simmetriche di sessione e la PFS (Perfect Forward Secrecy) sono già demandate all'handshake interno dello stack TLS.
-%       - Blockchain permissioned e Smart Contract (Lezione 07): Esclusi dall'architettura dell'urna in favore della hash chain centralizzata autenticata, per le 4 motivazioni critiche ampiamente argomentate in \S~\ref{subsec:compromesso_blockchain}.
-
-```
+\label{subsec:wp2_strumenti_non_adottati}
+% TODO: Motivare l'esclusione di:
+% - AES e cifratura simmetrica applicativa dedicata;
+% - KDC e Needham-Schroeder;
+% - Diffie-Hellman applicativo diretto;
+% - blockchain e smart contract.
+%
+% TODO: Non includere come alternative operative blind signatures, omomorfismo, ZKP,
+% mix-net o threshold decryption, perché non sono strumenti trattati nel corso. Possono
+% essere citati solo nelle sezioni sui vincoli strutturali come strumenti esterni che
+% servirebbero per ottenere SEC-1 o VER-2 in forma piena.
