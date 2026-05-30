@@ -15,27 +15,14 @@
 % - pubblicazione per finestre dei record dell'urna;
 % - chiarimento che le firme RSA non sono textbook RSA.
 
-\section{Panoramica dell'architettura e separazione funzionale}
-\label{sec:panoramica_architettura}
-% Obiettivo della sezione: presentare l'idea generale del protocollo prima dei
-% dettagli tecnici.
-%
-% TODO: Introdurre l'architettura client-server crittografica articolata in cinque
-% fasi: setup, autenticazione, costruzione della scheda, conservazione e scrutinio.
-%
-% TODO: Spiegare la separazione funzionale tra Sistema di Autenticazione (SA) e
-% Autorità Elettorale (AE): il SA conosce le identità, l'AE gestisce schede cifrate
-% e pseudonimi, ma non deve conoscere l'identità reale degli elettori.
-%
-% TODO: Richiamare l'Assunzione 1 del WP1: non-collusione SA/AE. Specificare che
-% lo pseudo-anonimato realizzato dal protocollo è condizionato a tale assunzione.
-%
-% TODO: Anticipare i due limiti strutturali che resteranno anche nel WP2:
-% (i) segretezza delle singole schede rispetto all'AE durante lo scrutinio
-%     (cfr. Sezione~\ref{subsec:wp2_limite_sec1});
-% (ii) verificabilità universale piena del conteggio
-%     (cfr. Sezione~\ref{subsec:wp2_limite_ver2}).
-% Il WP3 analizzerà il rischio residuo associato a questi limiti.
+
+Il protocollo proposto segue un'architettura client-server crittografica e si articola in cinque fasi principali: setup, autenticazione, costruzione della scheda, conservazione nell'urna e scrutinio. L'obiettivo è realizzare una procedura di voto coerente con il modello definito in WP1, mantenendo separati i compiti di identificazione dell'elettore, raccolta delle schede e pubblicazione dei risultati. 
+
+La scelta centrale dell'architettura è la separazione tra Sistema di Autenticazione, indicato come SA, e Autorità Elettorale, indicata come AE. Il SA verifica l'identità degli elettori e controlla che ciascuno riceva una sola abilitazione al voto. L'AE, invece, riceve e conserva le schede cifrate, registra i dati pubblici dell'urna e svolge lo scrutinio finale. In questo modo il SA conosce le identità reali, ma non vede le preferenze espresse; l'AE gestisce le schede e gli pseudonimi crittografici, ma non deve conoscere l'identità reale degli elettori. 
+
+Lo pseudo-anonimato ottenuto dal protocollo dipende quindi dall'Assunzione~1 del WP1, cioè dalla non-collusione tra SA e AE. Se le due entità condividessero i propri registri interni, il legame tra identità reale e scheda potrebbe essere ricostruito. Questa assunzione non viene nascosta, ma diventa uno dei punti di fiducia espliciti del sistema. 
+
+Restano inoltre due limiti strutturali che il protocollo non può eliminare usando solo gli strumenti trattati nel corso. Il primo riguarda la segretezza delle singole schede rispetto all'AE durante lo scrutinio, discussa nella Sezione~\ref{subsec:wp2_limite_sec1}. Il secondo riguarda la verificabilità universale piena del conteggio, discussa nella Sezione~\ref{subsec:wp2_limite_ver2}. In entrambi i casi, WP2 descrive le mitigazioni adottate, mentre WP3 analizzerà il rischio residuo rispetto al threat model.
 
 \subsection{Requisito TLS e limiti rispetto alla traffic analysis}
 \label{subsec:wp2_tls}
@@ -54,6 +41,7 @@
 %
 % TODO: Collegare questa mitigazione a due scelte applicative: t_finestra nei
 % certificati pseudonimi e pubblicazione per finestre dei record dell'urna.
+
 
 \section{Parametri e notazione}
 \label{sec:parametri_notazione}
