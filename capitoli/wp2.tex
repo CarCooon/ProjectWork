@@ -24,6 +24,7 @@ Lo pseudo-anonimato ottenuto dal protocollo dipende quindi dall'Assunzione~1 del
 
 Restano inoltre due limiti strutturali che il protocollo non può eliminare usando solo gli strumenti trattati nel corso. Il primo riguarda la segretezza delle singole schede rispetto all'AE durante lo scrutinio, discussa nella Sezione~\ref{subsec:wp2_limite_sec1}. Il secondo riguarda la verificabilità universale piena del conteggio, discussa nella Sezione~\ref{subsec:wp2_limite_ver2}. In entrambi i casi, WP2 descrive le mitigazioni adottate, mentre WP3 analizzerà il rischio residuo rispetto al threat model.
 
+\clearpage
 \subsection{Requisito TLS e limiti rispetto alla traffic analysis}
 \label{subsec:wp2_tls}
 % TODO: Dichiarare che tutte le comunicazioni Elettore--SA ed Elettore--AE avvengono
@@ -42,7 +43,22 @@ Restano inoltre due limiti strutturali che il protocollo non può eliminare usan
 % TODO: Collegare questa mitigazione a due scelte applicative: t_finestra nei
 % certificati pseudonimi e pubblicazione per finestre dei record dell'urna.
 
+Tutte le comunicazioni di rete tra l'Elettore e le componenti server (Sistema di Autenticazione e Autorità Elettorale) devono avvenire esclusivamente su canali cifrati tramite protocollo TLS (Transport Layer Security). In questa fase, l'autenticazione dei server è garantita dall'utilizzo di certificati digitali X.509 emessi dalla Certificate Authority (CA) d'Ateneo.
 
+L'impiego di TLS non rappresenta un semplice dettaglio implementativo, ma un requisito strutturale indispensabile. Come verrà dettagliato in seguito, il protocollo applicativo prevede che l'elettore firmi il pacchetto di voto $M$ per garantirne l'integrità. Tuttavia, tale firma non offre alcuna garanzia di confidenzialità. Senza la cifratura del canale di trasporto, i metadati essenziali contenuti nel pacchetto — tra cui il certificato pseudonimo $C_p$, il nonce $\eta$ e la firma $\sigma$ — viaggerebbero in chiaro. 
+
+Questa esposizione vanificherebbe il disaccoppiamento logico tra elettore e scheda. Un avversario di rete passivo, intercettando il traffico in chiaro, potrebbe facilmente estrarre il ciphertext $C$ e il nonce $\eta$. A quel punto, l'attaccante potrebbe calcolare autonomamente il commitment $K = H(C)$ e il conseguente fingerprint $F_j = H(K \parallel \eta)$. Cercando il valore $F_j$ all'interno dell'urna pubblica, l'avversario riuscirebbe a tracciare il voto, associando il record pubblicato all'indirizzo IP del mittente, violando così il requisito di segretezza.
+
+Tuttavia, è fondamentale non sovrastimare le reali garanzie di sicurezza offerte dal canale cifrato. Sebbene il protocollo TLS protegga il contenuto del payload, esso non è progettato per neutralizzare l'analisi del traffico. Un avversario in ascolto può ancora raccogliere metadati di rete cruciali, quali gli indirizzi IP sorgente e destinazione, le dimensioni dei pacchetti e, soprattutto, il \textit{timing} delle connessioni. 
+
+Un'analisi temporale che correli l'istante in cui un elettore si autentica presso il SA con l'istante in cui l'AE riceve una scheda cifrata potrebbe permettere di ricostruire il legame tra identità e voto, eludendo le protezioni crittografiche. Per mitigare questa specifica vulnerabilità a livello applicativo, il protocollo adotta due strategie complementari:
+\begin{enumerate}
+    \item \textbf{Timestamp a bassa risoluzione:} Il certificato pseudonimo $C_p$ non contiene l'istante esatto di emissione, ma un $t_{finestra}$ che rappresenta un intervallo orario predefinito, riducendo volutamente la precisione del dato temporale a disposizione dell'AE.
+    \item \textbf{Pubblicazione per finestre:} L'AE non registra né pubblica i record nell'urna in tempo reale al momento della ricezione, ma li raggruppa e li pubblica a blocchi in finestre temporali sfalsate o randomizzate.
+\end{enumerate}
+Queste due scelte applicative spezzano la correlazione temporale delle operazioni, ridimensionando fortemente il rischio di de-anonimizzazione basato sull'analisi del traffico di rete.
+
+\clearpage
 \section{Parametri e notazione}
 \label{sec:parametri_notazione}
 % Obiettivo della sezione: fornire una legenda unica, da usare in tutto WP2.
@@ -58,6 +74,41 @@ Restano inoltre due limiti strutturali che il protocollo non può eliminare usan
 % TODO: Specificare che sigma e R sono firme digitali basate su hash-and-sign,
 % non su RSA textbook.
 
+
+Al fine di garantire chiarezza espositiva ed evitare ambiguità descrittive nelle sezioni successive, la Tabella \ref{tab:parametri_notazione} definisce in un'unica legenda la notazione crittografica e i parametri operativi utilizzati in tutte le fasi del protocollo.
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.3} % Aumenta leggermente lo spazio verticale per migliore leggibilità
+\begin{tabular}{|l|p{4.5cm}|p{7.5cm}|}
+\hline
+\textbf{Simbolo} & \textbf{Significato} & \textbf{Contesto operativo} \\ \hline
+$N$ & Numero di opzioni di voto valide. & Utilizzato per il controllo di conformità strutturale della scheda ($1 \le i \le N$) in fase di scrutinio. \\ \hline
+$id_{elezione}$ & Identificatore univoco della consultazione in corso. & Previene attacchi di \textit{replay cross-elezione}. \\ \hline
+$(PU_{ele}, PR_{ele})$ & Coppia RSA dell'elezione. & $PU_{ele}$ cifra i voti (lato elettore); $PR_{ele}$ decifra le schede (lato AE in fase di scrutinio). \\ \hline
+$(PU_{SA}, PR_{SA})$ & Coppia RSA del SA. & $PR_{SA}$ firma i certificati pseudonimi degli elettori; $PU_{SA}$ ne verifica la validità. \\ \hline
+$(PU_{AE}, PR_{AE})$ & Coppia RSA dell'AE. & $PR_{AE}$ firma i record dell'urna, le ricevute e il documento finale; $PU_{AE}$ abilita la verifica pubblica. \\ \hline
+$(PU_v, PR_v)$ & Coppia RSA effimera. & Generata localmente dall'elettore, è valida solo per la singola sessione di voto e successivamente distrutta. \\ \hline
+$C_p$ & Certificato pseudonimo. & Emesso dal SA, attesta l'abilitazione al voto associandola alla chiave pubblica effimera $PU_v$. \\ \hline
+$i$ & Preferenza di voto. & Valore in chiaro scelto dall'elettore e codificato come intero scalare. \\ \hline
+$r$ & Fattore di randomizzazione. & Generato dall'elettore per lo schema RSA-OAEP, assicura l'indistinguibilità del ciphertext. \\ \hline
+$C$ & Scheda cifrata. & Calcolata dall'elettore come $\text{RSA-OAEP-Enc}(PU_{ele}, i; r)$. \\ \hline
+$\eta$ & Nonce a 256 bit. & Generato dall'elettore, inserito in chiaro nel pacchetto per garantire l'anti-replay e il fingerprinting. \\ \hline
+$t_{finestra}$ & Finestra temporale. & Identificatore a bassa risoluzione temporale inserito in $C_p$ per mitigare l'analisi del traffico. \\ \hline
+$t_{apertura}, t_{chiusura}$ & Timestamp ufficiali. & Definiscono i limiti temporali di validità per l'accettazione delle schede. \\ \hline
+$H(\cdot)$ & Funzione hash (SHA-256). & Primitiva utilizzata per \textit{commitment}, \textit{fingerprint} e firme digitali. \\ \hline
+$K_j = H(C_j)$ & \textit{Commitment} pubblico. & Traccia del ciphertext $C_j$ inserita nell'urna (impegna l'AE senza esporre il ciphertext in chiaro). \\ \hline
+$F_j = H(K_j \parallel \eta_j)$ & \textit{Fingerprint} (impronta). & Impronta indicizzata nel Merkle Tree dell'urna per abilitare la verifica individuale. \\ \hline
+$\sigma$ & Firma sul pacchetto. & Apposta dall'elettore con $PR_v$ per garantire l'integrità del pacchetto e la paternità effimera. \\ \hline
+$R$ & Ricevuta crittografica. & Rilasciata dall'AE e firmata con $PR_{AE}$ per attestare l'avvenuta ricezione e accettazione del pacchetto. \\ \hline
+\end{tabular}
+\caption{Legenda dei parametri e della notazione crittografica del protocollo.}
+\label{tab:parametri_notazione}
+\end{table}
+
+\textbf{Nota fondamentale sulle firme digitali:} Per garantire la totale aderenza ai requisiti di sicurezza e prevenire le vulnerabilità intrinseche in presenza di messaggi scelti dall'avversario, si specifica esplicitamente che le firme digitali del protocollo (come $\sigma$ ed $R$) sono implementate unicamente secondo lo schema \textbf{hash-and-sign}. I dati oggetto della firma vengono sempre preventivamente compressi tramite la funzione hash crittografica $H(\cdot)$ (SHA-256), e solo il digest risultante viene firmato tramite la chiave privata RSA. In nessuna fase dell'infrastruttura viene impiegata la firma RSA \textit{textbook} applicata direttamente al dato in chiaro.
+
+\clearpage
 \section{Il flusso del protocollo}
 \label{sec:flusso_protocollo}
 % Obiettivo della sezione: descrivere l'happy path cronologico, dalla preparazione
