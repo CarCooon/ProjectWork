@@ -767,11 +767,57 @@ Tuttavia, il rischio di frode derivante da questo vincolo strutturale è drastic
 % TODO: Specificare che la tabella non è ancora analisi di sicurezza: la resilienza
 % effettiva rispetto agli attaccanti del WP1 sarà discussa in WP3.
 
+A conclusione della definizione architetturale, la seguente matrice di tracciabilità riepiloga come i requisiti di sicurezza teorizzati nella fase iniziale (WP1) siano stati tradotti in meccanismi crittografici e procedurali all'interno del protocollo (WP2). 
+
+È fondamentale precisare che la presente tabella costituisce esclusivamente una mappatura funzionale delle scelte di design. Essa non rappresenta un'analisi di sicurezza formale: la resilienza effettiva dell'architettura e la capacità di resistere agli attaccanti (attivi, passivi e interni) definiti nel modello di minaccia saranno oggetto di trattazione e dimostrazione specifica nel successivo capitolo dedicato all'analisi delle vulnerabilità (WP3).
+
+\vspace{0.5cm}
+
+\begin{table}[hbt!]
+    \centering
+    \renewcommand{\arraystretch}{1.4} % Aumenta lo spazio verticale per leggibilità
+    \small % Riduce leggermente il font per far rientrare bene la tabella
+    \begin{tabular}{| p{2cm} | p{2.5cm} | p{5.5cm} | p{4cm} |}
+        \hline
+        \textbf{Proprietà} & \textbf{Stato realizzato} & \textbf{Meccanismo del protocollo} & \textbf{Assunzione / Vincolo} \\
+        \hline
+        \hline
+        \textbf{[AUTH-1]} \newline Autenticazione Elettore & Pieno & Autenticazione istituzionale al Server di Autenticazione (SA) per l'ottenimento del certificato pseudonimo $C_p$. & Fiducia nell'IdP esterno (es. SPID/CIE) e nel database anagrafico del SA. \\
+        \hline
+        \textbf{[AUTH-2]} \newline Autenticazione Autorità & Pieno & Utilizzo di canali TLS mutuamente autenticati e firme digitali basate sui certificati pubblici $PU_{SA}$ e $PU_{AE}$. & Esistenza di una PKI (Public Key Infrastructure) solida e preesistente. \\
+        \hline
+        \textbf{[UNIQ-1]} \newline Unicità del voto & Pieno & Il SA marca l'utente come "ha votato" negando ulteriori $C_p$. L'AE accetta un solo pacchetto per ogni certificato pseudonimo. & Il SA non deve emettere $C_p$ multipli per lo stesso utente. \\
+        \hline
+        \textbf{[UNIQ-2]} \newline Solo aventi diritto & Pieno & Controllo preventivo dell'eligibilità da parte del SA prima del rilascio del token abilitante all'accesso. & Database degli aventi diritto mantenuto aggiornato e integro. \\
+        \hline
+        \textbf{[INT-1]} \newline Integrità sul client & Pieno & Creazione in locale della chiave effimera $PR_v$, cifratura RSA-OAEP e calcolo del \textit{commitment} $K = H(C)$ in ambiente isolato. & Il dispositivo dell'elettore è considerato \textit{trusted} (privo di malware) prima dell'invio. \\
+        \hline
+        \textbf{[INT-2]} \newline Integrità in transito & Pieno & Pacchetto protetto dal tunnel TLS e sigillato esternamente dalla firma transitoria $\text{Sign}_{PR_v}$. & Solidità delle \textit{cipher suite} TLS concordate. \\
+        \hline
+        \textbf{[INT-3]} \newline Integrità dell'urna & Pieno & Registro \textit{append-only} basato su \textit{hash chain} vincolante ($H(Record_{j-1})$), \textit{Merkle Tree} e firme a blocchi dell'AE. & La chiave privata $PR_{AE}$ dell'Autorità Elettorale non è compromessa. \\
+        \hline
+        \textbf{[SEC-1]} \newline Segretezza del voto & Parziale \newline (Mitigato) & Cifratura asimmetrica; l'urna espone unicamente $K_j$ e $F_j$. Decifratura confinata alla sola chiave $PR_{ele}$. & L'AE funge da \textit{trust authority} e deve eseguire lo scrutinio \textit{black-box} in modo onesto. \\
+        \hline
+        \textbf{[SEC-2]} \newline Anonimato di rete & Pieno & Netta separazione dei ruoli (SA per identità, AE per raccolta). Pubblicazione ritardata tramite finestre temporali ($t_{finestra}$). & Assenza di collusione tra SA e AE. Sufficiente traffico misto nelle finestre temporali. \\
+        \hline
+        \textbf{[SEC-3]} \newline Anti-Coercizione & Parziale \newline (Assenza di ricevuta rivelante) & La ricevuta $R$ contiene la firma su $K_j$ e $F_j$, omettendo il \textit{plaintext}. Il client distrugge $PR_v$. & Il protocollo non rilascia ricevute rivelanti, ma non può impedire coercizioni fisiche/software esterne (es. screenshot). \\
+        \hline
+        \textbf{[VER-1]} \newline Verifica Individuale & Pieno & L'elettore ricalcola $K$ ed $F$, controlla $K_j = K$ sull'urna ed esegue in logaritmo la verifica di inclusione tramite \textit{Merkle Proof}. & L'utente deve conservare localmente $\eta$ e $R$ per agire in sede di disputa. \\
+        \hline
+        \textbf{[VER-2]} \newline Verifica Universale & Parziale \newline (Strutturale) & Il Verificatore pubblico controlla l'urna, gli hash e le firme. Un Auditor qualificato verifica proceduralmente che $K_j = H(C_j)$. & Impossibilità di validare matematicamente lo spoglio; necessaria fiducia nell'Audit per garantire la coerenza. \\
+        \hline
+    \end{tabular}
+    \caption{Matrice di tracciabilità: traduzione architetturale dei requisiti di sicurezza.}
+    \label{tab:matrice_sicurezza}
+\end{table}
+
+\clearpage
 \section{Analisi critica delle scelte progettuali}
 \label{sec:scelte_progettuali}
 
+A completamento della definizione architetturale, è opportuno analizzare criticamente due macro-decisioni progettuali che hanno definito il protocollo. Tali scelte rappresentano dei precisi \textit{trade-off} ingegneristici tra le proprietà di sicurezza desiderate, i vincoli operativi e la complessità infrastrutturale.
+
 \subsection*{Modello one-shot irrevocabile}
-\label{subsec:compromesso_irrevocabilita}
 \label{subsec:wp2_one_shot_irrevocabile}
 % TODO: Dichiarare che la scelta di non revoca/non sostituzione del voto è definitiva.
 %
@@ -782,18 +828,36 @@ Tuttavia, il rischio di frode derivante da questo vincolo strutturale è drastic
 %
 % TODO: Dichiarare il rischio residuo di coercizione pre-invio come accettato nel modello.
 
+Il protocollo adotta in modo rigido e definitivo un modello di voto \textit{one-shot}: una volta che un pacchetto di voto viene sottomesso e validato con successo dall'Autorità Elettorale, esso non può essere in alcun modo revocato, modificato o sostituito dall'elettore. Questa decisione predilige la salvaguardia dell'anonimato assoluto e la semplicità strutturale rispetto alla flessibilità operativa.
+
+L'implementazione di un meccanismo di sostituzione del voto entrerebbe infatti in collisione con i fondamenti crittografici del sistema, generando tre conflitti architetturali insormontabili:
+
+\begin{enumerate}
+    \item \textbf{Necessità di un identificativo persistente:} per poter sovrascrivere o annullare una scheda precedentemente inviata, il sistema dovrebbe essere in grado di correlare la nuova sottomissione a quella vecchia. Ciò imporrebbe l'introduzione di un identificativo pseudonimo persistente, abbattendo drasticamente le garanzie di non-tracciabilità fornite dal certificato usa-e-getta $C_p$.
+    \item \textbf{Conflitto con la distruzione delle chiavi:} per mitigare le coercizioni post-voto, il protocollo impone al client la distruzione irreversibile della chiave privata effimera $PR_v$ contestualmente all'invio della scheda. In assenza di tale chiave, l'utente non disporrebbe più del materiale crittografico necessario per dimostrare la provenienza originaria del pacchetto e richiederne legittimamente la cancellazione.
+    \item \textbf{Incompatibilità con i meccanismi di verifica:} la revoca di un voto richiederebbe la marcatura di invalidità o la rimozione di un record già storicizzato nella \textit{hash chain}. Questo mutamento retroattivo complicherebbe in modo critico sia la Verifica Individuale [VER-1] sia la Verifica Universale [VER-2], compromettendo la proprietà di immutabilità del registro \textit{append-only}.
+\end{enumerate}
+
+Di conseguenza, il modello architetturale accetta a priori un rischio residuo ineliminabile: qualora un elettore subisca una coercizione \textit{prima} dell'invio fisico della scheda, non avrà la possibilità di recarsi in un ambiente sicuro e sovrascrivere il voto estorto. Tale limitazione è giudicata accettabile a fronte della rigorosa tutela dell'anonimato di rete garantita dall'attuale impostazione.
+
 \subsection*{Architettura centralizzata vs blockchain}
-\label{subsec:compromesso_blockchain}
 \label{subsec:wp2_esclusione_blockchain}
 % TODO: Rinviare alla Sezione~\ref{subsec:wp2_centralizzata_vs_blockchain} e riassumere
 % le ragioni della scelta: trust authority, efficienza, scrutinio black-box, scarso valore
 % aggiunto dello smart contract.
 
+Come ampiamente argomentato nella Sezione~\ref{subsec:wp2_centralizzata_vs_blockchain}, l'esclusione di una \textit{blockchain} completa e di \textit{smart contract} in favore di un registro ibrido rappresenta il secondo grande \textit{trade-off} dell'architettura. 
+
+Questa rinuncia alla decentralizzazione pura non costituisce una lacuna, bensì una scelta consapevole per aderire al contesto istituzionale di riferimento (che presuppone l'esistenza di un'Autorità Elettorale legalmente riconosciuta) e per massimizzare l'efficienza prestazionale. Ritenendo preminenti i requisiti di bassa latenza in fase di sottomissione e considerando che lo scrutinio deve comunque avvenire in modalità \textit{black-box} (limite non risolvibile nativamente da un registro pubblico distribuito), l'uso di una \textit{hash chain} centralizzata ma universalmente verificabile si è confermata la scelta progettuale ottima. 
+
+In questo modo, il sistema acquisisce le medesime garanzie di inalterabilità e verificabilità di una rete distribuita, senza tuttavia esporsi all'enorme \textit{overhead} computazionale, ai problemi di consenso e alle potenziali superfici d'attacco tipiche dell'esecuzione di \textit{smart contract}.
+
+
+\clearpage
 \section{Strumenti del corso utilizzati e considerati}
 \label{sec:strumenti_corso}
 
 \subsection*{Strumenti adottati}
-\label{subsec:strumenti_adottati}
 \label{subsec:wp2_strumenti_adottati}
 % TODO: Elencare e mappare alle componenti del protocollo:
 % - RSA;
@@ -812,8 +876,20 @@ Tuttavia, il rischio di frode derivante da questo vincolo strutturale è drastic
 % i canali laterali di rete; la mitigazione è completata da t_finestra e pubblicazione
 % per finestre.
 
+La progettazione dell'architettura e del protocollo crittografico si fonda sull'impiego mirato di primitive e paradigmi consolidati, trattati all'interno del corso. Di seguito viene presentata la mappatura degli strumenti adottati e il relativo ruolo funzionale nel sistema:
+
+\begin{itemize}
+    \item \textbf{RSA e RSA-OAEP:} l'algoritmo RSA costituisce il cuore crittografico del sistema. In fase di cifratura della scheda sul client, viene rigorosamente impiegato lo schema di \textit{padding} RSA-OAEP. Questa scelta garantisce la sicurezza semantica (IND-CCA2) e previene attacchi di malleabilità, assicurando che due voti identici producano crittogrammi sempre diversi grazie all'iniezione di casualità.
+    \item \textbf{Firma digitale RSA \textit{hash-and-sign}:} utilizzata dal Server di Autenticazione (per firmare $C_p$), dall'Autorità Elettorale (per le ricevute e l'urna) e dal client (firma effimera $\text{Sign}_{PR_v}$). È fondamentale precisare che, ovunque nel protocollo sia indicata la notazione $\text{Sign}(\dots)$, non si fa mai riferimento all'insicuro \textit{textbook RSA} applicato direttamente al messaggio, bensì a un paradigma sicuro di tipo \textit{hash-and-sign} (come RSA-PSS), in cui l'algoritmo asimmetrico cifra il \textit{digest} prodotto da una funzione di hash forte.
+    \item \textbf{SHA-256:} adottata come funzione di hash crittografica standard per la generazione dei \textit{commitment} ($K_j$), dei \textit{fingerprint} ($F_j$) e per il calcolo di tutti i \textit{digest} necessari alle firme digitali e alle strutture dati dell'urna.
+    \item \textbf{Hash chain (\textit{Tamper-evident log}):} impiegata per strutturare il registro pubblico gestito dall'AE. L'uso di \textit{hash pointer} che incatenano sequenzialmente i record trasforma l'urna in un log \textit{append-only} a prova di manomissione, soddisfacendo l'integrità globale [INT-3].
+    \item \textbf{Merkle Tree:} albero di hash costruito parallelamente alla \textit{hash chain}. Permette di indicizzare i \textit{fingerprint} delle schede, fornendo prove di inclusione crittografiche che l'elettore può validare in tempo logaritmico, soddisfacendo il requisito di verifica individuale [VER-1].
+    \item \textbf{PKI e certificati X.509:} l'infrastruttura a chiave pubblica preesistente è il pilastro su cui poggia l'autenticazione delle autorità. I certificati X.509 garantiscono la distribuzione sicura e l'autenticità delle chiavi pubbliche del SA ($PU_{SA}$) e dell'AE ($PU_{AE}$).
+    \item \textbf{TLS (\textit{Transport Layer Security}):} utilizzato per stabilire canali sicuri e mutuamente autenticati per tutte le comunicazioni di rete. Tuttavia, si è tenuto conto del fatto che il TLS protegge la confidenzialità del \textit{payload}, ma non elimina i canali laterali legati all'analisi del traffico (\textit{traffic analysis} basata su tempistiche o dimensioni dei pacchetti). Tale limite architetturale del TLS è stato mitigato al livello applicativo tramite il meccanismo di pubblicazione per finestre temporali ($t_{finestra}$).
+    \item \textbf{Paradigma \textit{Encrypt-then-Sign}:} applicato rigorosamente dal client durante l'assemblaggio del pacchetto di voto nella Fase 2. Il voto viene prima cifrato in $C$, e solo successivamente l'insieme del crittogramma e dei metadati viene sigillato dalla firma effimera $\text{Sign}_{PR_v}$, garantendo l'integrità dei dati cifrati durante il transito in rete [INT-2].
+\end{itemize}
+
 \subsection*{Strumenti considerati e non adottati}
-\label{subsec:strumenti_non_adottati}
 \label{subsec:wp2_strumenti_non_adottati}
 % TODO: Motivare l'esclusione di:
 % - AES e cifratura simmetrica applicativa dedicata;
@@ -825,3 +901,12 @@ Tuttavia, il rischio di frode derivante da questo vincolo strutturale è drastic
 % mix-net o threshold decryption, perché non sono strumenti trattati nel corso. Possono
 % essere citati solo nelle sezioni sui vincoli strutturali come strumenti esterni che
 % servirebbero per ottenere SEC-1 o VER-2 in forma piena.
+
+Durante la fase di \textit{design}, alcuni strumenti e protocolli analizzati nel corso sono stati presi in considerazione ma successivamente scartati, in quanto non coerenti con il modello di minaccia, con l'infrastruttura istituzionale o con l'efficienza richiesta dal dominio elettorale:
+
+\begin{itemize}
+    \item \textbf{AES e cifratura simmetrica applicativa dedicata:} l'impiego della crittografia simmetrica al livello applicativo (per cifrare il singolo voto) è stato scartato. Il \textit{payload} (un intero rappresentante il candidato) è di dimensioni minime e non richiede i vantaggi prestazionali dell'AES. Inoltre, stabilire una chiave simmetrica condivisa \textit{ad-hoc} tra ogni singolo elettore e l'AE comporterebbe un onere di \textit{key management} ingiustificato. Il modello a chiave pubblica (RSA-OAEP), in cui chiunque può cifrare ma solo l'AE può decifrare, risulta strutturalmente superiore per questo scenario (sebbene AES operi trasparentemente a livello di trasporto nel tunnel TLS).
+    \item \textbf{KDC (\textit{Key Distribution Center}) e Needham-Schroeder:} i protocolli di distribuzione delle chiavi basati su un arbitro centrale fidato e su crittografia simmetrica sono ideali per reti chiuse o aziendali. In un sistema elettorale su vasta scala (Internet), distribuire chiavi di sessione tramite un KDC introdurrebbe un collo di bottiglia critico e richiederebbe la registrazione preventiva di ogni client con il server, un approccio superato dalla flessibilità della crittografia asimmetrica e della PKI.
+    \item \textbf{Diffie-Hellman applicativo diretto:} la derivazione di un segreto condiviso \textit{in-band} tra elettore e AE tramite scambio Diffie-Hellman non è necessaria al livello logico del protocollo. La cifratura asimmetrica risolve già il problema dell'imbustamento del voto, mentre la \textit{Perfect Forward Secrecy} (PFS) sulle sessioni di comunicazione viene interamente delegata all'\textit{handshake} del protocollo TLS sottostante.
+    \item \textbf{Blockchain e Smart Contract:} pur adottandone le primitive fondamentali (catene di hash e alberi di Merkle), l'implementazione di una \textit{blockchain} decentralizzata basata sul consenso e l'esecuzione di \textit{smart contract} sono state escluse. Come argomentato nell'Analisi Critica (Sezione~\ref{subsec:wp2_esclusione_blockchain}), l'adozione di un registro di sola aggiunta governato dall'Autorità Elettorale massimizza l'efficienza, annulla i tempi di propagazione e si adatta perfettamente a un contesto in cui è intrinsecamente richiesta una \textit{trust authority} per la fase di scrutinio \textit{black-box}.
+\end{itemize}
