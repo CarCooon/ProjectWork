@@ -438,8 +438,19 @@ Ai fini della verifica individuale VER-1, l'elettore conserva localmente soltant
 % TODO: Separare chiaramente i ruoli: hash chain come log storico; Merkle Tree come
 % indice efficiente per la verifica individuale.
 
+L'urna elettorale pubblica rappresenta il fulcro della trasparenza e della verificabilità dell'intero protocollo. Per garantire che i voti validati non possano essere alterati, rimossi o riordinati segretamente nel tempo, l'Autorità Elettorale pubblica i dati adottando una struttura crittografica ibrida. Tale architettura combina le proprietà di rigida sequenzialità di una \textit{hash chain} con l'efficienza di indicizzazione di un \textit{Merkle Tree}.
+
+Questa scelta progettuale è fondamentale per soddisfare simultaneamente due requisiti di sicurezza e di performance, separando in modo netto e sinergico i ruoli delle due primitive:
+
+\begin{itemize}
+    \item \textbf{Hash chain come log storico:} La base dell'urna è implementata come un registro di sola aggiunta (\textit{append-only}) intrinsecamente a prova di manomissione (\textit{tamper-evident log}). Ogni nuovo record pubblicato dall'AE contiene un \textit{hash pointer} che lo vincola matematicamente al record immediatamente precedente. Questa rigida concatenazione cristallizza l'ordine cronologico di ricezione delle schede: qualsiasi tentativo retroattivo di alterazione, inserimento illecito o cancellazione di un voto invaliderebbe a cascata tutti gli hash successivi, rendendo la manipolazione palese a qualunque osservatore esterno.
+    
+    \item \textbf{Merkle Tree come indice efficiente:} Sebbene la \textit{hash chain} sia perfetta per garantire l'integrità globale e storica dell'elezione, essa risulta computazionalmente inefficiente per la verifica individuale, poiché imporrebbe all'elettore una scansione lineare ($O(n)$) dell'intero registro. Per superare questo limite, l'architettura prevede la costruzione parallela di un albero di Merkle, i cui nodi foglia indicizzano i \textit{fingerprint} ($F_j$) delle schede registrate. Il Merkle Tree agisce dunque come un indice di ricerca altamente ottimizzato: esso consente all'AE di produrre una prova di inclusione crittografica estremamente compatta. Grazie a questa prova, l'elettore può verificare in tempo logaritmico ($O(\log n)$) la presenza del proprio record nell'urna, senza la necessità di scaricare o ispezionare l'intera catena.
+\end{itemize}
+
+Nelle sottosezioni seguenti verrà analizzata la struttura algebrica dei singoli blocchi e il meccanismo temporale che scandisce la pubblicazione dei record.
+
 \subsection*{Append-only log basato su hash chain}
-\label{subsec:hash_chain}
 \label{subsec:wp2_hash_chain}
 % TODO: Aggiornare la struttura del record pubblico:
 % Record_j = { j, K_j, F_j, H(Record_{j-1}), Sign_{PR_AE}(H(j || K_j || F_j || H(Record_{j-1}))) }.
@@ -447,6 +458,29 @@ Ai fini della verifica individuale VER-1, l'elettore conserva localmente soltant
 % TODO: Spiegare che Record_0 è il blocco di testa Params.
 %
 % TODO: Descrivere perché hash pointer e firme rendono rilevabili modifiche retroattive.
+
+La componente sequenziale dell'urna pubblica, preposta a fungere da registro storico inalterabile, è implementata tramite una catena di hash. Ogni qualvolta l'Autorità Elettorale accetta un pacchetto di voto valido e genera la ricevuta $R$, essa assembla e pubblica un nuovo blocco di dati. 
+
+La struttura algebrica del generico $j$-esimo record inserito nella catena è definita come segue:
+$$Record_j = \{ j, K_j, F_j, H(Record_{j-1}), \text{Sign}_{PR_{AE}}(H(j \parallel K_j \parallel F_j \parallel H(Record_{j-1}))) \}$$
+
+Ogni campo all'interno della struttura assolve a una specifica funzione crittografica:
+\begin{itemize}
+    \item $j$: l'indice posizionale sequenziale che definisce l'ordine di arrivo.
+    \item $K_j$: il \textit{commitment} pubblico al ciphertext della scheda ($H(C_j)$).
+    \item $F_j$: il \textit{fingerprint} univoco per la verifica individuale ($H(K_j \parallel \eta_j)$).
+    \item $H(Record_{j-1})$: l'\textit{hash pointer} che punta al blocco precedentemente validato.
+    \item $\text{Sign}_{PR_{AE}}(\dots)$: la firma digitale apposta dall'AE sul digest di tutti i campi sopraelencati, garante dell'autenticità del blocco.
+\end{itemize}
+
+L'ancoraggio iniziale di questa catena, ovvero il blocco genesi $Record_0$, corrisponde esattamente al blocco di testa $Params$ generato durante la Fase di Setup, il quale contiene i parametri pubblici dell'elezione e non include alcun voto.
+
+\subsubsection*{Rilevabilità delle modifiche retroattive}
+La combinazione tra \textit{hash pointer} e firma digitale trasforma il registro in un log di sola aggiunta (\textit{append-only}) crittograficamente blindato. L'inclusione di $H(Record_{j-1})$ nel nuovo record incatena matematicamente ogni voto all'intera cronologia pregressa. 
+
+Se un attaccante — o la stessa Autorità Elettorale, in un'ipotesi di corruzione — tentasse di alterare un \textit{commitment}, rimuovere un record scomodo o inserire un voto fittizio in una posizione pregressa $k$ (con $k < j$), il digest $H(Record_k)$ cambierebbe drasticamente a causa delle proprietà crittografiche della funzione hash (resistenza alle collisioni ed effetto valanga). Tale mutazione invaliderebbe l'\textit{hash pointer} memorizzato nel blocco successivo $Record_{k+1}$, la cui firma digitale non risulterebbe più matematicamente verificabile rispetto al contenuto modificato.
+
+Per nascondere l'alterazione, l'attaccante sarebbe costretto a ricalcolare e rifirmare tutti i blocchi da $k$ fino a $j$. Tuttavia, l'applicazione della firma $\text{Sign}_{PR_{AE}}$ su ciascun blocco impedisce la contraffazione della catena a chiunque non possieda la chiave privata dell'AE. Di conseguenza, l'architettura garantisce l'integrità globale [INT-3]: qualsiasi deviazione dalla sequenza originale risulta immediatamente verificabile e denunciabile da qualunque revisore terzo o elettore che disponga della chiave pubblica $PU_{AE}$.
 
 \subsection*{Ruolo del commitment pubblico \(K_j\)}
 \label{subsubsec:wp2_ruolo_kj}
@@ -458,12 +492,28 @@ Ai fini della verifica individuale VER-1, l'elettore conserva localmente soltant
 %
 % TODO: Non presentare K_j come soluzione a VER-2 piena; è un rafforzamento strutturale.
 
+All'interno del record pubblicato, il valore $K_j = H(C_j)$ svolge la funzione di \textit{commitment} crittografico. Sfruttando l'unidirezionalità della funzione di hash, questo parametro garantisce la proprietà di \textit{hiding}: esso non rivela in alcun modo il ciphertext $C_j$ né, di conseguenza, la preferenza di voto, preservando la totale confidenzialità dei dati esposti sull'urna pubblica.
+
+Al contempo, $K_j$ garantisce una forte proprietà di \textit{binding}: esso vincola crittograficamente l'Autorità Elettorale all'esatto ciphertext che è stato ricevuto e validato durante la Fase 3. Qualsiasi alterazione successiva del pacchetto $C_j$ nel database privato dell'AE produrrebbe un hash radicalmente diverso, rompendo irrevocabilmente il legame con il $K_j$ cristallizzato nella \textit{hash chain}.
+
+Questa architettura abilita l'esecuzione di rigorosi controlli procedurali e di \textit{audit} a posteriori. Un revisore indipendente a cui venga temporalmente concesso l'accesso all'archivio interno dell'AE (ad esempio, durante o dopo le procedure di scrutinio) può validare l'integrità dell'intera elezione semplicemente ricalcolando l'hash di ciascuna scheda cifrata $C_j$ e verificandone la perfetta corrispondenza con il rispettivo $K_j$ storicizzato nell'urna. Ciò rende tecnicamente rilevabile qualsiasi tentativo da parte dell'AE di sostituire o manipolare le schede archiviate prima della decifratura.
+
+È tuttavia fondamentale precisare i limiti teorici di questo meccanismo: l'impiego di $K_j$ non rappresenta una soluzione crittografica al requisito di Verificabilità Universale [VER-2]. Poiché un osservatore esterno non possiede né l'accesso al ciphertext $C_j$ né i parametri di randomizzazione, non può validare autonomamente la corrispondenza tra i voti espressi e il risultato finale dello scrutinio. Il commitment pubblico agisce piuttosto come un robusto rafforzamento strutturale: esso riduce drasticamente il perimetro d'azione di un potenziale attaccante interno (\textit{insider threat}), subordinando l'alterazione dei voti archiviati al fallimento certo di una verifica di \textit{audit}.
+
 \subsection*{Pubblicazione per finestre}
 \label{subsubsec:wp2_pubblicazione_finestre}
 % TODO: Dichiarare che i record non vengono pubblicati in tempo reale uno per uno, ma
 % per finestre temporali coerenti con t_finestra.
 %
 % TODO: Motivare la scelta come mitigazione della correlazione temporale SA--AE.
+
+Per completare la strategia di protezione dell'anonimato a livello di rete, l'architettura dell'urna prevede che i record validati non vengano pubblicati in tempo reale nel momento esatto della loro ricezione. Sebbene l'elettore riceva istantaneamente la ricevuta crittografica $R$ al superamento dei controlli della Fase 3, l'Autorità Elettorale non aggiorna in modo sincrono la \textit{hash chain} pubblica. 
+
+Al contrario, le schede accettate vengono temporaneamente mantenute in un buffer sicuro e successivamente aggregate per essere inserite nell'urna a blocchi, seguendo finestre temporali di pubblicazione predefinite. Tali intervalli sono temporalmente coerenti con il parametro a bassa risoluzione $t_{finestra}$ introdotto nel certificato pseudonimo $C_p$.
+
+Questa specifica scelta progettuale rappresenta una contromisura fondamentale contro le vulnerabilità legate all'analisi del traffico (\textit{traffic analysis}). Se l'aggiornamento dell'urna fosse istantaneo, un avversario in grado di osservare passivamente i flussi di rete potrebbe facilmente correlare l'istante in cui un determinato elettore si autentica presso il SA con l'istante in cui appare un nuovo record pubblico sull'urna gestita dall'AE. 
+
+Raggruppando i record e differendone la visibilità pubblica, l'AE interrompe questo canale latente. L'esatto momento di sottomissione del singolo pacchetto viene reso indistinguibile all'interno del blocco aggregato, abbattendo la correlazione temporale tra le operazioni delle due autorità e preservando rigorosamente le garanzie di pseudo-anonimato previste dal protocollo.
 
 \subsection*{Indice efficiente basato su Merkle Tree}
 \label{subsec:merkle_tree}
@@ -475,6 +525,18 @@ Ai fini della verifica individuale VER-1, l'elettore conserva localmente soltant
 %
 % TODO: Distinguere Verificatore Universale (scarica la hash chain) ed elettore
 % individuale (scarica solo la proof di membership relativa a F_j).
+
+Parallelamente alla \textit{hash chain}, l'architettura dell'urna prevede la costruzione di un albero di hash (Merkle Tree). Mentre la catena storicizza l'intero pacchetto informativo, i nodi foglia di questa struttura ad albero sono costituiti esclusivamente dai \textit{fingerprint} univoci ($F_j$) delle schede accettate. 
+
+Questo indice viene aggiornato dinamicamente dall'Autorità Elettorale in concomitanza con il rilascio dei blocchi aggregati. Al termine di ogni finestra temporale di pubblicazione, l'AE calcola la nuova radice dell'albero (\textit{Merkle Root}), la firma digitalmente e la espone pubblicamente. Alla chiusura ufficiale delle operazioni di voto ($t_{chiusura}$), viene generata e pubblicata la \textit{Merkle Root} definitiva, la quale sigilla crittograficamente e in modo irrevocabile l'insieme di tutti i voti validamente registrati.
+
+L'implementazione del Merkle Tree è dettata dalla necessità di ottimizzare le prestazioni, separando radicalmente l'onere computazionale in base al soggetto che effettua la verifica:
+
+\begin{itemize}
+    \item \textbf{Verificatore Universale (Revisore/Auditor):} un soggetto terzo incaricato di validare l'integrità globale dell'elezione deve necessariamente scaricare la \textit{hash chain} nella sua interezza. Attraverso una scansione lineare ($O(n)$), il revisore ricalcola tutti gli \textit{hash pointer}, verifica le firme dell'AE e ricostruisce il Merkle Tree partendo dai \textit{fingerprint} pubblicati, per accertarsi che la radice ottenuta combaci con la \textit{Merkle Root} ufficiale.
+    
+    \item \textbf{Elettore individuale:} al contrario, il singolo utente che desideri accertarsi dell'avvenuta ricezione e inclusione della propria scheda [VER-1] non è costretto a processare l'intero registro. Il client dell'elettore richiede semplicemente all'AE la prova di inclusione relativa al proprio specifico $F_j$. Grazie agli hash complementari forniti dalla prova, l'elettore può ricalcolare il percorso fino alla radice impiegando un tempo logaritmico ($O(\log n)$). Confrontando il risultato con la \textit{Merkle Root} pubblica, l'utente ottiene la certezza matematica dell'inclusione del voto, minimizzando il consumo di banda e di risorse di calcolo sul proprio dispositivo.
+\end{itemize}
 
 \subsection*{Scelta progettuale: architettura centralizzata vs blockchain}
 \label{subsec:wp2_centralizzata_vs_blockchain}
@@ -489,6 +551,19 @@ Ai fini della verifica individuale VER-1, l'elettore conserva localmente soltant
 %
 % TODO: Lasciare la blockchain come possibile direzione futura in scenari trustless o
 % con decifratura distribuita, ma non come scelta del WP2.
+
+Sebbene l'architettura ibrida dell'urna pubblica adotti primitive crittografiche tipiche delle tecnologie a registro distribuito (come la \textit{hash chain} e il \textit{Merkle Tree}), il protocollo esclude deliberatamente l'impiego di una \textit{blockchain} completa e decentralizzata. 
+
+Questa decisione architetturale deriva da un'analisi rigorosa dei requisiti e del modello di minaccia, riassumibile in quattro motivazioni fondamentali:
+
+\begin{itemize}
+    \item \textbf{Presenza di un'autorità istituzionale (\textit{trust authority}):} le reti \textit{blockchain} nascono per risolvere il problema del consenso in ambienti \textit{trustless} (privi di un ente centrale di cui fidarsi) e disintermediati. Nel contesto di un'elezione accademica o istituzionale, l'Autorità Elettorale (AE) costituisce un'entità legalmente riconosciuta, preposta e autorizzata alla gestione del processo. Sostituirla con un meccanismo di consenso distribuito introdurrebbe una complessità architetturale ingiustificata.
+    \item \textbf{Efficienza e latenza:} un registro di sola aggiunta gestito centralmente e firmato digitalmente dall'AE garantisce un \textit{throughput} elevatissimo e tempi di latenza minimi. Al contrario, una \textit{blockchain} richiede la propagazione dei blocchi nella rete, la validazione distribuita e il raggiungimento del consenso globale, operazioni che degraderebbero significativamente le prestazioni in fase di sottomissione dei voti.
+    \item \textbf{Limiti nello scrutinio \textit{black-box}:} la \textit{blockchain} garantisce l'immutabilità pubblica dei record, ma non offre alcuna soluzione intrinseca per il conteggio confidenziale delle schede. Essendo i voti cifrati con RSA-OAEP, lo scrutinio rimane un processo \textit{black-box} che necessita dell'intervento esclusivo dell'entità in possesso della chiave privata dell'elezione ($PR_{ele}$). L'archiviazione su un registro distribuito non risolverebbe questa dipendenza strutturale dall'AE per la fase di spoglio.
+    \item \textbf{Equivalenza crittografica rispetto agli \textit{smart contract}:} nel modello di minaccia considerato, la stesura e l'esecuzione di uno \textit{smart contract} non aggiungerebbero alcun valore in termini di sicurezza rispetto alla struttura adottata. Una \textit{hash chain} pubblicamente accessibile e validata dalle firme digitali inconfutabili dell'AE rende qualsiasi tentativo di manomissione matematicamente e universalmente rilevabile. Tale struttura soddisfa pienamente le necessità di auditability del protocollo senza ricorrere a macchine virtuali distribuite.
+\end{itemize}
+
+L'adozione di una \textit{blockchain} completa rimane una valida direzione di sviluppo futuro qualora il protocollo dovesse essere esteso a scenari puramente \textit{trustless}. In tali casi estremi, l'infrastruttura distribuita dovrebbe essere affiancata a meccanismi di generazione e decifratura distribuita delle chiavi (\textit{threshold cryptography}), così da frammentare anche la fase di scrutinio. Tuttavia, in base agli attuali obiettivi di sicurezza, verificabilità ed efficienza del presente progetto, l'architettura crittograficamente verificabile ma gestita centralmente rappresenta la soluzione ottimale.
 
 \section{Chiusura delle urne, scrutinio e pubblicazione}
 \label{sec:scrutinio_pubblicazione}
