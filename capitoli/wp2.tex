@@ -565,6 +565,7 @@ Questa decisione architetturale deriva da un'analisi rigorosa dei requisiti e de
 
 L'adozione di una \textit{blockchain} completa rimane una valida direzione di sviluppo futuro qualora il protocollo dovesse essere esteso a scenari puramente \textit{trustless}. In tali casi estremi, l'infrastruttura distribuita dovrebbe essere affiancata a meccanismi di generazione e decifratura distribuita delle chiavi (\textit{threshold cryptography}), così da frammentare anche la fase di scrutinio. Tuttavia, in base agli attuali obiettivi di sicurezza, verificabilità ed efficienza del presente progetto, l'architettura crittograficamente verificabile ma gestita centralmente rappresenta la soluzione ottimale.
 
+\clearpage
 \section{Chiusura delle urne, scrutinio e pubblicazione}
 \label{sec:scrutinio_pubblicazione}
 
@@ -574,6 +575,10 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 % e numero totale di schede.
 %
 % TODO: Specificare che dopo t_chiusura non vengono accettati nuovi record.
+
+Allo scoccare del termine prestabilito $t_{chiusura}$, il sistema interrompe formalmente l'accettazione di nuovi pacchetti di voto. Qualsiasi sottomissione di scheda successiva a questo istante temporale viene automaticamente respinta e la connessione interrotta. 
+
+Per sancire la fine delle operazioni di voto, l'Autorità Elettorale (AE) genera e pubblica un record di chiusura definitivo in coda alla \textit{hash chain}. Questo blocco terminale include il numero totale delle schede ricevute ($k_{totale}$) e la \textit{Merkle Root} finale. Tale operazione consolida in modo irrevocabile lo stato dell'urna: l'aggiunta della firma digitale $\text{Sign}_{PR_{AE}}$ sul record di chiusura sigilla il registro, impedendo qualsiasi ulteriore inserimento o manipolazione.
 
 \subsection*{Decifratura e validazione delle schede}
 \label{subsec:wp2_decifratura_validazione}
@@ -586,6 +591,13 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 % TODO: Le schede non conformi vengono marcate come invalide con record firmato e non
 % eliminate dall'urna.
 
+Conclusa la fase di ricezione pubblica, l'AE avvia le procedure di scrutinio. È cruciale sottolineare che l'AE non estrae i dati di voto dall'urna pubblica (la quale contiene esclusivamente i \textit{commitment} non invertibili $K_j$), bensì recupera i ciphertext originali $C_j$ dal proprio archivio interno e privato.
+
+Per ciascuna scheda archiviata, l'AE impiega la chiave privata dell'elezione (precedentemente isolata tramite il principio del \textit{least privilege}) per ottenere la preferenza in chiaro:
+$$i_j = \text{RSA-OAEP-Dec}(PR_{ele}, C_j)$$
+
+Una volta decifrato il voto, il sistema esegue un controllo di conformità per verificare che il valore ricada nell'intervallo strutturalmente consentito ($1 \le i_j \le N$). Qualora una scheda restituisca un valore fuori range o risulti malformata (ad esempio a causa di una manipolazione intenzionale pre-cifratura), essa non viene in alcun modo eliminata dal registro o rimossa dall'urna pubblica, poiché ciò corromperebbe la \textit{hash chain}. Viene invece formalmente etichettata come "scheda invalida" nel database interno. Tale anomalia viene tracciata tramite un apposito record di invalidazione firmato dall'AE, garantendo l'integrità del processo senza alterare la sequenza crittografica.
+
 \subsection*{Calcolo e pubblicazione del risultato}
 \label{subsec:wp2_calcolo_risultato}
 % TODO: Presentare Risultato[k] = |{j : i_j = k}|.
@@ -594,6 +606,20 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 % Merkle_Root_finale e firma AE.
 %
 % TODO: Specificare che i singoli plaintext i_j non vengono pubblicati.
+
+Terminate le operazioni di validazione, l'AE procede al conteggio delle preferenze. Per ciascun candidato $k \in \{1, \dots, N\}$, i voti validi vengono sommati calcolando la cardinalità dell'insieme delle schede conformi:
+$$Risultato[k] = |\{j : i_j = k\}|$$
+
+Al fine di tutelare l'assoluta confidenzialità delle scelte individuali, i singoli \textit{plaintext} $i_j$ estratti durante la decifratura non vengono mai pubblicati, esposti a terzi o ricollegati ai rispettivi \textit{fingerprint} $F_j$. 
+
+L'esito della consultazione viene ufficializzato mediante la pubblicazione di un Documento di Scrutinio Finale ($Doc_{finale}$), strutturato come segue:
+\begin{equation*}
+\begin{split}
+Doc_{finale} = \{ & Risultato, k_{totale}, k_{conformi}, k_{invalide}, \text{Merkle\_Root}_{finale}, \\
+& \text{Sign}_{PR_{AE}}(H(Risultato \parallel k_{totale} \parallel k_{conformi} \parallel k_{invalide} \parallel \text{Merkle\_Root}_{finale})) \}
+\end{split}
+\end{equation*}
+Tale documento espone in chiaro il conteggio aggregato, le statistiche di regolarità del voto (conformi e invalide) e la radice dell'albero per le operazioni di audit, il tutto autenticato in modo inconfutabile dalla firma digitale dell'autorità.
 
 \subsection*{Dichiarazione del vincolo strutturale \texttt{[SEC-1]}}
 \label{subsec:limite_sec1}
@@ -608,6 +634,27 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 % in conservazione pubblica perché l'urna contiene K_j e F_j ma non C_j, accesso ai
 % voti in chiaro limitato alla fase di scrutinio e all'AE.
 
+Il design crittografico fin qui delineato garantisce una solida protezione dei dati, ma introduce una precisa limitazione architetturale rispetto al soddisfacimento assoluto della proprietà di Segretezza del Voto [SEC-1]. Una realizzazione piena e incondizionata di tale requisito imporrebbe che la preferenza rimanga matematicamente inaccessibile a qualsiasi entità, inclusa l'Autorità Elettorale stessa.
+
+Tuttavia, poiché lo schema RSA-OAEP adottato non possiede proprietà omomorfiche (le quali permetterebbero di eseguire il conteggio aggregato direttamente sui crittogrammi senza decifrarli), l'AE è strutturalmente obbligata a decifrare individualmente ciascun $C_j$ per poter determinare il risultato.
+
+La letteratura crittografica offre strumenti avanzati per superare questo limite teorico ed eliminare la fiducia riposta nell'autorità centrale, tra cui:
+\begin{itemize}
+    \item \textbf{Cifratura omomorfica additiva (es. Paillier, ElGamal esponenziale):} una classe di algoritmi che consente di eseguire operazioni algebriche direttamente sui crittogrammi. La moltiplicazione dei \textit{ciphertext} produce un crittogramma che contiene la somma esatta dei voti; in questo modo l'AE potrebbe decifrare unicamente il risultato finale aggregato, senza mai accedere alle singole schede in chiaro.
+    \item \textbf{Decifratura a soglia (\textit{Threshold Decryption}):} un paradigma che prevede la frammentazione della chiave privata dell'elezione ($PR_{ele}$) tra molteplici entità o server indipendenti. La decifratura di una singola scheda richiederebbe la cooperazione crittografica di un sottoinsieme minimo prestabilito (soglia) di queste entità, abbattendo il \textit{Single Point of Failure} relativo alla segretezza.
+    \item \textbf{Mix-net verificabile:} un'infrastruttura di nodi indipendenti che prende l'urna cifrata, ne rimescola i record in ordine casuale e altera il fattore di randomizzazione dei crittogrammi (\textit{re-encryption}) fornendo prove matematiche di correttezza (\textit{Zero-Knowledge Proofs}). Questo processo recide in modo irrevocabile il collegamento tra il pacchetto originario immesso dall'elettore e il \textit{plaintext} decifrato in fase di scrutinio.
+\end{itemize}
+
+L'integrazione di tali meccanismi comporterebbe tuttavia un \textit{overhead} computazionale, infrastrutturale e di gestione delle chiavi non compatibile con gli obiettivi di efficienza del presente progetto.
+
+Di conseguenza, il protocollo descritto non soddisfa [SEC-1] nel suo senso più estremo (\textit{trustless}), ma ne garantisce una declinazione solida e ben definita. In questa architettura, la segretezza è assicurata lungo tre direttrici:
+\begin{enumerate}
+    \item \textbf{Segretezza in transito:} garantita dal canale TLS durante l'invio del pacchetto.
+    \item \textbf{Segretezza in conservazione pubblica:} garantita dall'urna, che espone unicamente i parametri offuscati ($K_j$ e $F_j$) senza rivelare il ciphertext $C_j$.
+    \item \textbf{Accesso in chiaro circoscritto:} limitato strettamente alla fase conclusiva di scrutinio e ristretto in via esclusiva all'AE, la quale opera in veste di \textit{trust authority} istituzionale e si impegna alla cancellazione sicura dei \textit{plaintext} dopo il consolidamento del risultato.
+\end{enumerate}
+
+\clearpage
 \section{Meccanismi di verifica}
 \label{sec:meccanismi_verifica}
 
@@ -628,6 +675,22 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 % TODO: Specificare il caso di scheda scartata: l'elettore può esibire R per attivare
 % una verifica procedurale.
 
+L'architettura garantisce all'elettore la possibilità di accertarsi in modo autonomo che la propria scheda sia stata correttamente ricevuta, registrata e inclusa nel conteggio finale, soddisfacendo il requisito di Verificabilità Individuale [VER-1]. Al termine della consultazione, l'utente può eseguire la seguente procedura crittografica:
+
+\begin{enumerate}
+    \item Ricalcola il \textit{commitment} del proprio \textit{ciphertext} originale: $K = H(C)$.
+    \item Ricalcola il proprio \textit{fingerprint} univoco utilizzando il fattore di randomizzazione salvato in locale: $F = H(K \parallel \eta)$.
+    \item Richiede all'Autorità Elettorale (AE) la prova di inclusione relativa a $F$. Avvalendosi degli hash complementari forniti, calcola il percorso fino alla radice e lo confronta con la \textit{Merkle Root} definitiva.
+    \item Opzionalmente, qualora desideri un controllo esaustivo, scarica il corrispondente $Record_j$ dalla \textit{hash chain} pubblica e verifica che il parametro $K_j$ in esso pubblicato coincida perfettamente con il proprio $K$.
+\end{enumerate}
+
+Il cardine di questa verifica risiede nella ricevuta crittografica $R$ rilasciata istantaneamente al momento del voto. Tale ricevuta vincola in modo matematico e inconfutabile i parametri $K_j$ e $F_j$, l'indice posizionale $j$ e l'identificativo dell'elezione $id_{ele}$ attraverso la firma digitale dell'AE.
+
+È imperativo chiarire un aspetto critico in merito alla segretezza: la ricevuta $R$ attesta l'avvenuta ricezione e inclusione del pacchetto cifrato, ma non espone in alcun modo la preferenza in chiaro $i_j$ né i parametri necessari per decifrarla. Pertanto, il protocollo garantisce la fondamentale proprietà di \textbf{assenza di una ricevuta rivelante rilasciata dal sistema} (\textit{receipt-freeness} strutturale). Questa caratteristica previene la coercizione o il voto di scambio basati su prove fornite direttamente dall'architettura elettorale, pur non potendo impedire in senso assoluto che un elettore costruisca prove esterne colludendo con un attaccante (ad esempio, registrando lo schermo o installando software spia sul proprio client prima della cifratura).
+
+Infine, il possesso della ricevuta $R$ costituisce uno strumento di tutela procedurale inestimabile per l'elettore. Qualora, in sede di pubblicazione dei risultati, il sistema ometta la scheda o la dichiari ingiustificatamente assente, l'elettore può esibire la propria $R$. Essendo autenticata dalla firma $\text{Sign}_{PR_{AE}}$, la ricevuta rappresenta una prova inconfutabile dell'avvenuta sottomissione e della sua validazione iniziale. Tale esibizione innesca l'attivazione di un \textit{audit} formale, costringendo l'AE a giustificare l'incongruenza e rendendo tecnicamente rilevabile qualsiasi manipolazione interna dolosa o malfunzionamento del database privato.
+
+\clearpage
 \subsection*{Verifica universale \texttt{[VER-2]}}
 \label{subsec:verifica_universale}
 \label{subsec:wp2_verifica_universale}
@@ -641,6 +704,21 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 % TODO: Aggiungere il caso auditor: se un revisore ottiene accesso ai ciphertext C_j,
 % può verificare K_j = H(C_j) e quindi la coerenza tra archivio interno e urna pubblica.
 
+Il protocollo assicura a qualsiasi osservatore esterno (cittadini, enti indipendenti, associazioni) la possibilità di validare l'integrità globale dell'elezione e la corretta esecuzione delle procedure, nel rispetto dei limiti di confidenzialità intrinseci all'architettura adottata. Attraverso il download e l'ispezione dell'urna pubblica e del Documento di Scrutinio Finale ($Doc_{finale}$), un Verificatore Universale può eseguire autonomamente i seguenti controlli crittografici e formali:
+
+\begin{itemize}
+    \item \textbf{Consistenza della \textit{Merkle Root}:} ricalcolo dell'intero albero a partire dall'insieme dei \textit{fingerprint} $F_j$ pubblicati, accertando che il risultato coincida in modo esatto con la radice dichiarata nel record di chiusura.
+    \item \textbf{Integrità sequenziale:} validazione a cascata di tutti gli \textit{hash pointer} ($H(Record_{j-1})$) per garantire matematicamente l'assenza di alterazioni, inserimenti postumi o rimozioni di record all'interno della \textit{hash chain}.
+    \item \textbf{Validità delle firme sui record:} verifica crittografica tramite la chiave pubblica $PU_{AE}$ per accertare che ogni singolo blocco sia stato generato e autenticato dalla legittima Autorità Elettorale.
+    \item \textbf{Coerenza numerica dello scrutinio:} validazione dell'equazione strutturale $k_{conformi} + k_{invalide} = k_{totale}$, dimostrando che nessuna scheda registrata nell'urna è stata omessa in fase di spoglio.
+    \item \textbf{Autenticità del documento finale:} verifica della firma digitale inclusa nel $Doc_{finale}$, a garanzia che l'aggregazione dei risultati e la \textit{Merkle Root} definitiva non siano state contraffatte da terzi.
+\end{itemize}
+
+A integrazione dei controlli pubblici sopraelencati, l'architettura supporta procedure di \textit{auditing} avanzato tramite verificatori terzi autorizzati. Qualora un revisore istituzionale ottenga, per fini di controllo, l'accesso temporaneo all'archivio interno e privato dell'AE, egli riceve la facoltà di ispezionare l'insieme dei \textit{ciphertext} originari $C_j$.
+
+Ricalcolando l'hash di ogni singola scheda cifrata, il revisore è in grado di appurare che valga in modo stringente l'uguaglianza $K_j = H(C_j)$ rispetto ai \textit{commitment} storicizzati sulla \textit{hash chain}. Tale verifica certifica in modo inconfutabile la coerenza tra il database interno dell'Autorità e il registro pubblico inalterabile, rendendo tecnicamente impossibile per l'AE sostituire o manipolare silenziosamente i \textit{ciphertext} prima che questi vengano inviati al modulo di decifratura.
+
+\clearpage
 \subsection*{Dichiarazione del vincolo strutturale \texttt{[VER-2]}}
 \label{subsec:limite_ver2}
 \label{subsec:wp2_limite_ver2}
@@ -655,6 +733,24 @@ L'adozione di una \textit{blockchain} completa rimane una valida direzione di sv
 %
 % TODO: Evidenziare le due mitigazioni disponibili: verifica individuale con R e audit
 % procedurale basato su K_j = H(C_j), se i ciphertext vengono resi disponibili ai revisori.
+
+Analogamente a quanto analizzato per la segretezza del voto, l'architettura proposta realizza una Verificabilità Universale [VER-2] di tipo puramente strutturale, rinunciando a una verifica matematica e pubblica dell'esatto conteggio delle preferenze. 
+
+Il protocollo garantisce che l'urna sia inalterabile e ispezionabile da chiunque, ma non offre a un osservatore esterno gli strumenti crittografici per accertare che l'Autorità Elettorale (AE) abbia decifrato e conteggiato in modo onesto e corretto ogni singolo \textit{ciphertext} $C_j$. Poiché le operazioni di decifratura e spoglio avvengono in un perimetro \textit{black-box} gestito in via esclusiva dall'AE tramite la chiave privata $PR_{ele}$, l'esattezza matematica del risultato pubblicato si fonda necessariamente sulla fiducia procedurale riposta nell'autorità stessa.
+
+Per ottenere una verificabilità universale assoluta (\textit{End-to-End Verifiability}), in cui l'affidabilità dell'ente centrale viene matematicamente esclusa, il design avrebbe dovuto integrare strumenti crittografici avanzati, quali:
+\begin{itemize}
+    \item \textbf{Dimostrazioni a Conoscenza Zero (\textit{Zero-Knowledge Proofs}):} per attestare pubblicamente la corretta esecuzione dell'algoritmo di decifratura sulle singole schede, senza mai rivelare la chiave privata.
+    \item \textbf{Tally omomorfico:} per consentire a chiunque di verificare il conteggio aggregato eseguendo operazioni algebriche direttamente sui crittogrammi pubblicati nell'urna.
+    \item \textbf{Mix-net verificabile:} per garantire una corrispondenza crittograficamente provabile tra i pacchetti immessi e i voti in chiaro pubblicati, senza svelare il legame utente-scheda.
+\end{itemize}
+Come già argomentato, tali primitive sono state deliberatamente omesse per non aggravare la complessità computazionale e infrastrutturale del sistema. 
+
+Tuttavia, il rischio di frode derivante da questo vincolo strutturale è drasticamente ridimensionato dalla presenza di due contromisure complementari, che limitano severamente i margini di manovra dell'AE:
+\begin{enumerate}
+    \item \textbf{Verifica individuale:} l'ausilio della ricevuta $R$ permette all'elettore di validare autonomamente l'inclusione del proprio voto. Se l'AE alterasse o scartasse fraudolentemente una porzione rilevante di schede, si esporrebbe a una mole statisticamente significativa di denunce da parte degli utenti, i quali dispongono di prove crittografiche inconfutabili (le ricevute firmate dall'AE stessa).
+    \item \textbf{Audit procedurale subordinato:} qualora i \textit{ciphertext} originali $C_j$ vengano resi accessibili in fase di scrutinio a un collegio di revisori terzi autorizzati, è possibile innescare un controllo di coerenza deterministico. I revisori possono ricalcolare gli hash e accertare la rigida uguaglianza $K_j = H(C_j)$. Questa corrispondenza certifica indubbiamente che l'AE ha decifrato e scrutinato lo stesso identico insieme di schede originariamente sigillato nell'urna pubblica.
+\end{enumerate}
 
 \section{Riepilogo funzionale delle proprietà di sicurezza}
 \label{sec:riepilogo_proprieta}
