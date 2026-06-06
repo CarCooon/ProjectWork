@@ -307,7 +307,7 @@ L'elettore genera localmente un valore casuale monouso a 256 bit:
 $$\eta \leftarrow\$ \{0,1\}^{256}$$
 Questo parametro (\textit{nonce}) riveste un duplice ruolo strutturale all'interno del protocollo:
 \begin{enumerate}
-    \item \textbf{Segreto per la verifica individuale:} partendo dal \textit{commitment} pubblico al ciphertext calcolato come $K = H(C)$, il \textit{fingerprint} univoco della scheda viene derivato come $F = H(K \parallel \eta)$. Essendo $\eta$ noto esclusivamente all'elettore, nessun terzo può calcolare questo hash e individuare a quale utente corrisponda una determinata scheda nell'urna. Ciò abilita il meccanismo di verifica della presenza del voto garantendo l'\textbf{assenza di ricevuta rivelante}, poiché l'elettore non dispone di alcun elemento esibibile per dimostrare il proprio voto a un potenziale coercitore.
+    \item \textbf{Valore non pubblico per la verifica individuale:} partendo dal \textit{commitment} pubblico al ciphertext calcolato come $K = H(C)$, il \textit{fingerprint} univoco della scheda viene derivato come $F = H(K \parallel \eta)$. Il nonce $\eta$ è generato dall'elettore e trasmesso all'AE tramite TLS: è quindi condiviso tra elettore e AE, ma non viene pubblicato nell'urna e non è osservabile da terzi. Questa scelta impedisce a un osservatore esterno di calcolare autonomamente il fingerprint e di collegare direttamente una scheda pubblicata all'elettore. Ciò abilita il meccanismo di verifica della presenza del voto garantendo l'\textbf{assenza di ricevuta rivelante}, poiché l'elettore non dispone di alcun elemento esibibile per dimostrare il proprio voto a un potenziale coercitore.
     \item \textbf{Parametro anti-replay:} agisce come misura complementare. Sebbene l'unicità del voto sia garantita in prima istanza dal controllo sulla chiave effimera $PU_v$, il nonce $\eta$ fornisce un ulteriore livello di protezione crittografica, verificabile in modo indipendente e ancor prima di validare lo stato del certificato pseudonimo.
 \end{enumerate}
 
@@ -332,7 +332,7 @@ In aderenza alle specifiche di sicurezza, l'operazione $\text{Sign}$ impiega uni
 
 È cruciale sottolineare che la firma $\sigma$ copre l'hash del ciphertext $C$, e non il voto in chiaro $i$. Questo meccanismo rileva qualsiasi tentativo di manipolazione in transito: un attaccante \textit{Man-in-the-Middle} che provasse a sostituire $C$ con una propria scheda cifrata invaliderebbe matematicamente $\sigma$. 
 
-Infine, si ribadisce che $\eta$, $C_p$ e la firma viaggiano in chiaro all'interno della struttura logica del pacchetto $M$, affinché l'AE possa estrarli ed elaborare i controlli previsti. Tuttavia, la loro confidenzialità lungo la trasmissione in rete è integralmente protetta dal tunnel TLS sottostante.
+Infine, si ribadisce che $\eta$, $C_p$ e la firma sono presenti in chiaro all'interno della struttura logica del pacchetto $M$, affinché l'AE possa estrarli ed eseguire i controlli previsti. In particolare, $\eta$ è necessario per il controllo anti-replay e per il calcolo del fingerprint $F_j = H(K_j \parallel \eta_j)$. La confidenzialità di questi campi rispetto a osservatori esterni è garantita dal tunnel TLS sottostante.
 
 \textbf{Proprietà realizzate:} [INT-1], [UNIQ-2].
 
@@ -679,7 +679,7 @@ L'architettura garantisce all'elettore la possibilità di accertarsi in modo aut
 
 \begin{enumerate}
     \item Ricalcola il \textit{commitment} del proprio \textit{ciphertext} originale: $K = H(C)$.
-    \item Ricalcola il proprio \textit{fingerprint} univoco utilizzando il fattore di randomizzazione salvato in locale: $F = H(K \parallel \eta)$.
+    \item Ricalcola il proprio \textit{fingerprint} univoco utilizzando il nonce $\eta$ conservato localmente dopo l'invio del voto: $F = H(K \parallel \eta)$.
     \item Richiede all'Autorità Elettorale (AE) la prova di inclusione relativa a $F$. Avvalendosi degli hash complementari forniti, calcola il percorso fino alla radice e lo confronta con la \textit{Merkle Root} definitiva.
     \item Opzionalmente, qualora desideri un controllo esaustivo, scarica il corrispondente $Record_j$ dalla \textit{hash chain} pubblica e verifica che il parametro $K_j$ in esso pubblicato coincida perfettamente con il proprio $K$.
 \end{enumerate}
