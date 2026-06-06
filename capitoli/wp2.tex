@@ -297,7 +297,7 @@ Nelle sottosezioni seguenti verrà analizzata la struttura algebrica dei singoli
 \subsection*{Append-only log basato su hash chain}
 \label{subsec:wp2_hash_chain}
 
-La componente sequenziale dell'urna pubblica, preposta a fungere da registro storico inalterabile, è implementata tramite una catena di hash. Ogni qualvolta l'Autorità Elettorale accetta un pacchetto di voto valido e genera la ricevuta $R$, essa assembla e pubblica un nuovo blocco di dati. 
+La componente sequenziale dell'urna pubblica, preposta a fungere da registro storico inalterabile, è implementata tramite una catena di hash. Ogni qualvolta l'Autorità Elettorale accetta un pacchetto di voto valido e genera la ricevuta $R$, essa prepara il record pubblico associato all'indice $j$. Il record viene poi pubblicato nell'urna pubblica durante la finestra temporale prevista, mantenendo il legame con l'indice già comunicato all'elettore.
 
 La struttura algebrica del generico $j$-esimo record inserito nella catena è definita come segue:
 $$Record_j = \{ j, K_j, F_j, H(Record_{j-1}), \text{Sign}_{PR_{AE}}(H(j \parallel K_j \parallel F_j \parallel H(Record_{j-1}))) \}$$
