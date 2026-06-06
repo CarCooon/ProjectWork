@@ -772,44 +772,101 @@ A conclusione della definizione architetturale, la seguente matrice di tracciabi
 È fondamentale precisare che la presente tabella costituisce esclusivamente una mappatura funzionale delle scelte di design. Essa non rappresenta un'analisi di sicurezza formale: la resilienza effettiva dell'architettura e la capacità di resistere agli attaccanti (attivi, passivi e interni) definiti nel modello di minaccia saranno oggetto di trattazione e dimostrazione specifica nel successivo capitolo dedicato all'analisi delle vulnerabilità (WP3).
 
 \vspace{0.5cm}
-
-\begin{table}[hbt!]
-    \centering
-    \renewcommand{\arraystretch}{1.4} % Aumenta lo spazio verticale per leggibilità
-    \small % Riduce leggermente il font per far rientrare bene la tabella
-    \begin{tabular}{| p{2cm} | p{2.5cm} | p{5.5cm} | p{4cm} |}
-        \hline
-        \textbf{Proprietà} & \textbf{Stato realizzato} & \textbf{Meccanismo del protocollo} & \textbf{Assunzione / Vincolo} \\
-        \hline
-        \hline
-        \textbf{[AUTH-1]} \newline Autenticazione Elettore & Pieno & Autenticazione istituzionale al Server di Autenticazione (SA) per l'ottenimento del certificato pseudonimo $C_p$. & Fiducia nell'IdP esterno (es. SPID/CIE) e nel database anagrafico del SA. \\
-        \hline
-        \textbf{[AUTH-2]} \newline Autenticazione Autorità & Pieno & Utilizzo di canali TLS mutuamente autenticati e firme digitali basate sui certificati pubblici $PU_{SA}$ e $PU_{AE}$. & Esistenza di una PKI (Public Key Infrastructure) solida e preesistente. \\
-        \hline
-        \textbf{[UNIQ-1]} \newline Unicità del voto & Pieno & Il SA marca l'utente come "ha votato" negando ulteriori $C_p$. L'AE accetta un solo pacchetto per ogni certificato pseudonimo. & Il SA non deve emettere $C_p$ multipli per lo stesso utente. \\
-        \hline
-        \textbf{[UNIQ-2]} \newline Solo aventi diritto & Pieno & Controllo preventivo dell'eligibilità da parte del SA prima del rilascio del token abilitante all'accesso. & Database degli aventi diritto mantenuto aggiornato e integro. \\
-        \hline
-        \textbf{[INT-1]} \newline Integrità sul client & Pieno & Creazione in locale della chiave effimera $PR_v$, cifratura RSA-OAEP e calcolo del \textit{commitment} $K = H(C)$ in ambiente isolato. & Il dispositivo dell'elettore è considerato \textit{trusted} (privo di malware) prima dell'invio. \\
-        \hline
-        \textbf{[INT-2]} \newline Integrità in transito & Pieno & Pacchetto protetto dal tunnel TLS e sigillato esternamente dalla firma transitoria $\text{Sign}_{PR_v}$. & Solidità delle \textit{cipher suite} TLS concordate. \\
-        \hline
-        \textbf{[INT-3]} \newline Integrità dell'urna & Pieno & Registro \textit{append-only} basato su \textit{hash chain} vincolante ($H(Record_{j-1})$), \textit{Merkle Tree} e firme a blocchi dell'AE. & La chiave privata $PR_{AE}$ dell'Autorità Elettorale non è compromessa. \\
-        \hline
-        \textbf{[SEC-1]} \newline Segretezza del voto & Parziale \newline (Mitigato) & Cifratura asimmetrica; l'urna espone unicamente $K_j$ e $F_j$. Decifratura confinata alla sola chiave $PR_{ele}$. & L'AE funge da \textit{trust authority} e deve eseguire lo scrutinio \textit{black-box} in modo onesto. \\
-        \hline
-        \textbf{[SEC-2]} \newline Anonimato di rete & Pieno & Netta separazione dei ruoli (SA per identità, AE per raccolta). Pubblicazione ritardata tramite finestre temporali ($t_{finestra}$). & Assenza di collusione tra SA e AE. Sufficiente traffico misto nelle finestre temporali. \\
-        \hline
-        \textbf{[SEC-3]} \newline Anti-Coercizione & Parziale \newline (Assenza di ricevuta rivelante) & La ricevuta $R$ contiene la firma su $K_j$ e $F_j$, omettendo il \textit{plaintext}. Il client distrugge $PR_v$. & Il protocollo non rilascia ricevute rivelanti, ma non può impedire coercizioni fisiche/software esterne (es. screenshot). \\
-        \hline
-        \textbf{[VER-1]} \newline Verifica Individuale & Pieno & L'elettore ricalcola $K$ ed $F$, controlla $K_j = K$ sull'urna ed esegue in logaritmo la verifica di inclusione tramite \textit{Merkle Proof}. & L'utente deve conservare localmente $\eta$ e $R$ per agire in sede di disputa. \\
-        \hline
-        \textbf{[VER-2]} \newline Verifica Universale & Parziale \newline (Strutturale) & Il Verificatore pubblico controlla l'urna, gli hash e le firme. Un Auditor qualificato verifica proceduralmente che $K_j = H(C_j)$. & Impossibilità di validare matematicamente lo spoglio; necessaria fiducia nell'Audit per garantire la coerenza. \\
-        \hline
-    \end{tabular}
+\begin{longtable}{| p{2.4cm} | p{2.5cm} | p{5cm} | p{4.1cm} |}
     \caption{Matrice di tracciabilità: traduzione architetturale dei requisiti di sicurezza.}
-    \label{tab:matrice_sicurezza}
-\end{table}
+    \label{tab:matrice_sicurezza} \\
+
+    \hline
+    \textbf{Proprietà}
+    & \textbf{Stato realizzato}
+    & \textbf{Meccanismo del protocollo}
+    & \textbf{Assunzione / Vincolo} \\
+    \hline
+    \hline
+    \endfirsthead
+
+    \hline
+    \textbf{Proprietà}
+    & \textbf{Stato realizzato}
+    & \textbf{Meccanismo del protocollo}
+    & \textbf{Assunzione / Vincolo} \\
+    \hline
+    \hline
+    \endhead
+
+    \textbf{[AUTH-1]} \newline Verifica del diritto di voto
+    & Pieno
+    & Il SA autentica l'utente con credenziali istituzionali e rilascia $C_p$ solo agli aventi diritto.
+    & Registro degli aventi diritto corretto e SA affidabile nella fase di autenticazione. \\
+    \hline
+
+    \textbf{[AUTH-2]} \newline Inviolabilità delle Credenziali
+    & Pieno
+    & $C_p$ è firmato dal SA con $PR_{SA}$ e verificato dall'AE con $PU_{SA}$. Un attaccante non può produrre un certificato valido senza falsificare la firma.
+    & Sicurezza della firma digitale, protezione di $PR_{SA}$ e affidabilità della PKI d'Ateneo. \\
+    \hline
+
+    \textbf{[UNIQ-1]} \newline Singolarità del Voto
+    & Pieno
+    & Il SA rilascia al massimo un $C_p$ per elettore e per $id_{elezione}$. L'AE accetta al massimo un pacchetto per ogni $PU_v$.
+    & Registri interni di SA e AE mantenuti correttamente. \\
+    \hline
+
+    \textbf{[UNIQ-2]} \newline Irripetibilità della Scheda
+    & Pieno
+    & Il nonce $\eta$ viene registrato dall'AE nel \texttt{Registro\_Nonce\_AE}. Un pacchetto già trasmesso viene rilevato come replay.
+    & $\eta$ deve essere imprevedibile e il registro dei nonce deve essere consultato correttamente. \\
+    \hline
+
+    \textbf{[INT-1]} \newline Integrità in Transito
+    & Pieno
+    & Il pacchetto $M = (C, C_p, \eta, id_{elezione}, \sigma)$ viaggia su TLS ed è firmato con $PR_v$. Ogni modifica invalida $\sigma$.
+    & Sicurezza di TLS, verifica corretta della firma e chiave effimera non compromessa prima dell'invio. \\
+    \hline
+
+    \textbf{[INT-2]} \newline Conformità della Scheda
+    & Parziale
+    & Dopo la decifratura, l'AE verifica $1 \le i_j \le N$. Le schede non conformi sono marcate come invalide tramite record firmato.
+    & La validazione avviene durante lo scrutinio e richiede corretta esecuzione da parte dell'AE. \\
+    \hline
+
+    \textbf{[INT-3]} \newline Immutabilità dell'Urna
+    & Condizionale
+    & L'urna usa hash chain, hash pointer, firme dell'AE e Merkle Tree. Le modifiche retroattive ai record pubblicati diventano rilevabili.
+    & Corretta pubblicazione dei record e chiave privata $PR_{AE}$ non compromessa. \\
+    \hline
+
+    \textbf{[SEC-1]} \newline Segretezza della Scheda
+    & Parziale
+    & Il voto è cifrato con RSA-OAEP e trasmesso su TLS. L'urna pubblica espone solo $K_j = H(C_j)$ e $F_j = H(K_j \parallel \eta_j)$.
+    & L'AE deve comunque decifrare le singole schede durante lo scrutinio. \\
+    \hline
+
+    \textbf{[SEC-2]} \newline Pseudo-anonimato
+    & Condizionale
+    & Il SA conosce l'identità reale; l'AE riceve solo $C_p$ privo di dati identificativi. $t_{finestra}$ e pubblicazione per finestre riducono la correlazione temporale.
+    & Dipende dall'Assunzione~1 del WP1: non collusione tra SA e AE. \\
+    \hline
+
+    \textbf{[SEC-3]} \newline Assenza di Ricevuta
+    & Parziale
+    & $R$ attesta la registrazione della scheda cifrata, ma non rivela la preferenza. La cancellazione di $PR_v$ riduce le prove crittografiche esportabili.
+    & Non impedisce prove esterne, come screenshot, registrazioni o controllo diretto del dispositivo. \\
+    \hline
+
+    \textbf{[VER-1]} \newline Verificabilità Individuale
+    & Pieno
+    & L'elettore ricalcola $K = H(C)$ e $F = H(K \parallel \eta)$, verifica la Merkle Proof e controlla il commitment $K_j$ nel record pubblico.
+    & L'elettore deve conservare $C$, $\eta$, $R$ e l'indice $j$. \\
+    \hline
+
+    \textbf{[VER-2]} \newline Verificabilità Universale
+    & Parziale \newline (strutturale)
+    & Il verificatore controlla hash chain, firme AE, Merkle Root, contatori finali e coerenza dei record. Un auditor può verificare $K_j = H(C_j)$.
+    & Lo scrutinio resta interno all'AE: non è verificabile matematicamente da chiunque. \\
+    \hline
+
+\end{longtable}
 
 \clearpage
 \section{Analisi critica delle scelte progettuali}
