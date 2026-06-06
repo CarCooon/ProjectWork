@@ -56,6 +56,7 @@ Se da un lato la revocabilità offre una difesa teorica contro il voto di scambi
     \item \textbf{Complessità della Verificabilità:} Permettere voti modificabili complicherebbe le procedure di verifica individuale e universale. Gli osservatori non dovrebbero semplicemente verificare l'inclusione di una scheda in un registro immutabile, ma dovrebbero validare la corretta cronologia e l'effettivo scarto delle schede obsolete, richiedendo strumenti logici avanzati che esulano dagli obiettivi del sistema.
 \end{enumerate}
 
+\noindent
 Sulla base di questa onesta analisi critica dei limiti strutturali, si stabilisce come scelta progettuale definitiva che \textbf{il voto espresso sia rigidamente non revocabile e non modificabile (modello "one-shot")}. Una volta che la scheda viene trasmessa e registrata, essa è considerata definitiva e immutabile. Si evidenzia come tale semplificazione rappresenti un compromesso ingegneristico pienamente giustificato per lo scenario universitario di riferimento: a differenza delle elezioni politiche nazionali, dove l'alto rischio di voto di scambio e coercizione sistemica rende la revocabilità un requisito irrinunciabile, in ambito accademico la minaccia di estorsione organizzata del voto rappresenta un rischio decisamente più contenuto. Di conseguenza, si ritiene corretto privilegiare la linearità del protocollo, la robustezza dello pseudo-anonimato e la massima efficienza computazionale globale del sistema. Il rischio residuo legato alla coercizione estemporanea viene accettato e parzialmente mitigato attraverso la rigidità del formato a lista chiusa descritto in precedenza.
 
 
@@ -145,9 +146,6 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 \textbf{Risorse:} Rappresenta la minaccia interna con il controllo più ampio sui dati raccolti. Gestisce direttamente l'infrastruttura che ospita l'urna digitale e la bacheca pubblica accessibile a tutti. Ha in custodia i voti protetti e si occupa materialmente del calcolo dei risultati, ma non ha a disposizione le informazioni necessarie per collegare una specifica scheda alla persona reale che l'ha inviata.
 
 
-\clearpage
-
-
 \section{Proprietà di Sicurezza da Preservare}
 \label{sec:1.6_proprieta_sicurezza}
 
@@ -198,9 +196,6 @@ Questa categoria rappresenta il fondamento della trasparenza del sistema. Poich�
 \end{itemize}
 
 
-\clearpage
-
-
 \section{Completeness}
 \label{sec:1.7_completeness}
 
@@ -218,4 +213,5 @@ In questo scenario ideale, privo di avversari attivi o passivi, la completezza d
     \item \textbf{Convergenza della Verificabilità (con probabilità 1):} Poiché tutte le schede sono state generate e processate rispettando il protocollo, le prove matematiche prodotte insieme ai risultati dello scrutinio risulteranno intrinsecamente corrette. Di conseguenza, l'algoritmo di verifica universale eseguito dal Verificatore Pubblico sui dati dell'urna restituirà sempre esito positivo. Analogamente, la verifica individuale condotta dall'elettore sulla propria ricevuta andrà a buon fine con certezza assoluta (probabilità pari a 1).
 \end{enumerate}
 
+\noindent
 La formalizzazione di questa proprietà è un requisito propedeutico per le successive fasi di modellazione: dimostra infatti la validità algoritmica e strutturale del sistema prima ancora di introdurre il modello di minaccia e di analizzare il comportamento del protocollo in presenza di entità malevole.
