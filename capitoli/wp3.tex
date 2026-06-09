@@ -1,0 +1,179 @@
+\chapter{WP3: Analisi della Sicurezza}
+\label{ch:wp3}
+
+% Breve intro sugli scopi del capitolo
+\section{Introduzione e Metodologia di Analisi}
+\label{sec:3.1_introduzione}
+
+In questo capitolo viene presentata la validazione formale e l'analisi critica dell'intero sistema di voto elettronico proposto. Il WP3 ha lo scopo di dimostrare il grado di resilienza dell'architettura in presenza di entità malevole, raccordando i requisiti e le minacce astratte formalizzate nel modello (WP1) con le specifiche tecniche e crittografiche definite nel protocollo (WP2).
+
+L'analisi di sicurezza non si limita a una rassegna descrittiva delle difese, ma adotta una metodologia rigorosa basata su tre direttrici fondamentali:
+
+\begin{enumerate}
+    \item \textbf{Verifica di resilienza sul Modello di Minaccia:} Ciascuno dei 7 profili di attacco identificati nel Threat Model viene analizzato singolarmente. Sfruttando le regole di interazione descritte nel flusso del protocollo, si dimostra come le risorse e le capacità dell'attaccante siano neutralizzate dai meccanismi crittografici del client e dei server, tracciando la persistenza delle proprietà di sicurezza.
+    \item \textbf{Valutazione dei rischi residui e dei limiti strutturali:} Per garantire la massima trasparenza progettuale, vengono esaminati i limiti strutturali del protocollo (ovvero i requisiti marcati come ``Parziali'' o ``Condizionali'' nella Matrice di Tracciabilità). Verrà dimostrato sotto quali precise assunzioni tali rischi risultino accettabili e mitigati per lo scenario universitario di riferimento.
+    \item \textbf{Dimostrazione dell'ottimalità dei \textit{trade-off}:} In stretta aderenza alle direttive di progetto, l'analisi proverà l'impossibilità di apportare modifiche ovvie o immediate all'architettura capaci di migliorare una proprietà di sicurezza senza causare un contestuale peggioramento in un'altra o senza violare il vincolo di efficienza computazionale e prestazionale.
+\end{enumerate}
+
+Attraverso questo approccio, il WP3 fornisce la giustificazione teorica della solidità del sistema, validando le scelte progettuali prima della loro effettiva simulazione e implementazione software (WP4).
+
+% --- PARTE 1: COME "SCONFIGGIAMO I CATTIVI" ---
+% Qui riprendiamo esattamente i 7 profili del WP1 (Sezione 1.5) e spieghiamo
+% quali meccanismi del WP2 li bloccano o li mitigano.
+\section{Resilienza rispetto al Modello di Minaccia}
+\label{sec:3.2_resilienza_minacce}
+
+\subsection{Avversario di Rete (Man-in-the-Middle)}
+\label{subsec:3.2.1_mitm}
+
+L'Avversario di Rete (Man-in-the-Middle) rappresenta la minaccia esterna classica posizionata sul canale di comunicazione, caratterizzata da profili di attacco sia attivi che passivi. Disponendo del controllo totale sui nodi di instradamento, sulle reti locali e sui provider di servizi, questo avversario mira a violare la riservatezza spiando i pacchetti o ad alterare i voti in transito prima che raggiungano il server dell'urna elettronica. Tuttavia, non possedendo l'accesso ad alcuna chiave crittografica segreta, le sue capacità vengono interamente neutralizzate dall'architettura del protocollo. La dimostrazione di resilienza viene articolata analizzando i singoli vettori d'attacco:
+
+\paragraph{Tentativo di intercettazione passiva (\textit{Eavesdropping}):} In modalità passiva, l'obiettivo dell'avversario è catturare il pacchetto di voto per scoprire l'associazione tra l'identità dell'elettore e la sua scelta. Se il canale non fosse protetto, i metadati sensibili viaggerebbero in chiaro, consentendo all'attaccante di calcolare il \textit{commitment} $K=H(C)$ e il relativo \textit{fingerprint} $F_j=H(K||\eta)$, tracciando il voto sull'urna pubblica e associandolo all'indirizzo IP del client. Questa minaccia viene neutralizzata dall'obbligo di instradare tutte le comunicazioni su canali cifrati tramite protocollo TLS (\textit{Transport Layer Security}). L'autenticazione dei server (SA e AE) è garantita da certificati digitali X.509 istituzionali ancorati alla PKI d'Ateneo preesistente, impedendo all'avversario di forzare lo scambio di chiavi pubbliche fittizie. Poiché l'intero pacchetto di voto $M=(C,C_p,\eta,id_{elezione},\sigma)$ transita all'interno del tunnel cifrato, il payload rimane confidenziale rispetto a osservatori esterni. Viene così pienamente garantita la segretezza della scheda in transito \textbf{[SEC-1]} e protetto lo pseudo-anonimato dell'elettore di rete \textbf{[SEC-2]} da intercettazioni dirette.
+
+\paragraph{Tentativo di manipolazione attiva (Alterazione del voto):} In modalità attiva, l'avversario intercetta il pacchetto $M$ e tenta di alterare il ciphertext $C$ per deviare la preferenza espressa verso un candidato di sua scelta. Questa manipolazione viene rilevata e bloccata grazie all'applicazione del paradigma applicativo \textit{Encrypt-then-Sign} nella Fase 2. L'elettore sigilla il pacchetto apponendo la firma digitale effimera $\sigma = \text{Sign}_{PR_v}(H(C \parallel C_p \parallel \eta \parallel id_{elezione}))$, generata tramite la propria chiave privata monouso $PR_v$. Qualsiasi alterazione del ciphertext $C$ o dei metadati operata dall'avversario produce, per la proprietà di resistenza alle collisioni di SHA-256, un \textit{digest} completamente differente. Durante la Fase 3, l'Autorità Elettorale esegue la \textit{Verifica Integrità} convalidando la firma $\sigma$ mediante la chiave pubblica effimera $PU_v$ estratta dal certificato pseudonimo $C_p$. Poiché l'avversario è privo della chiave privata locale $PR_v$, non può ricalcolare una firma valida sul blocco modificato. Il controllo fallisce matematicamente e l'AE rigetta il pacchetto d'ufficio interrompendo la connessione, preservando l'integrità in transito \textbf{[INT-1]}.
+
+\paragraph{Tentativo di ritrasmissione attiva (\textit{Attacco di Replay}):} Un avversario attivo potrebbe intercettare un pacchetto di voto $M$ formalmente integro e ritrasmetterlo in un secondo momento per indurre l'AE a registrare una seconda volta lo stesso voto o per causare anomalie. Il protocollo disinnesca questa minaccia tramite due controlli sequenziali vincolanti eseguiti dall'AE in Fase 3:
+\begin{itemize}
+    \item \textbf{Verifica dell'unicità del certificato}: L'AE verifica che la chiave pubblica effimera $PU_v$ contenuta nel certificato pseudonimo $C_p$ non sia già presente nel \texttt{Registro\_Effimeri\_AE}. Essendo il pacchetto originale già registrato, la chiave risulterà duplicata e la sottomissione verrà immediatamente bloccata.
+    \item \textbf{Verifica anti-replay sul nonce}: L'AE interroga il proprio \texttt{Registro\_Nonce\_AE} per accertarsi che il valore casuale a 256 bit $\eta$ non sia mai stato memorizzato in precedenza. La duplicazione esatta del pacchetto provocherà una collisione nel registro dei nonce, determinando il rigetto istantaneo della richiesta.
+\end{itemize}
+Questi meccanismi combinati annullano i tentativi di manipolazione cronologica e garantiscono la proprietà di irripetibilità della scheda \textbf{[UNIQ-2]}.
+
+\subsection{Attaccante DoS (Denial of Service)}
+\label{subsec:3.2.2_dos}
+
+L'Attaccante DoS (Denial of Service) è un avversario attivo che mira a esaurire le risorse di rete o computazionali del sistema. Il suo obiettivo non è intercettare le comunicazioni o manomettere i dati, bensì generare flussi di traffico anomali per saturare le connessioni verso il Sistema di Autenticazione (SA) o l'Autorità Elettorale (AE), bloccando di fatto l'accesso alla piattaforma e impedendo lo svolgimento della consultazione.
+
+Per trasparenza progettuale, va evidenziato che l'architettura proposta, essendo centralizzata (scelta giustificata in WP2 per ottimizzare la latenza e consentire lo scrutinio \textit{black-box}), è esposta a interruzioni del servizio causati da attacchi volumetrici. Non avvalendosi della ridondanza strutturale tipica dei registri distribuiti (\textit{blockchain}), il protocollo affida la gestione del traffico malevolo alle difese di rete dell'Ateneo, considerandola esterna al perimetro prettamente crittografico. Di conseguenza, un attacco DoS sferrato con successo è in grado di violare la \textbf{Completezza} del sistema, interrompendo l'erogazione del servizio.
+
+Tuttavia, l'analisi formale del protocollo dimostra che la compromissione della disponibilità non si traduce mai in un degrado delle proprietà di sicurezza o nell'alterazione dello scrutinio. Le difese crittografiche reagiscono secondo una logica \textit{fail-safe}:
+
+\begin{itemize}
+    \item \textbf{Inviolabilità dei dati storicizzati:} Qualora l'attaccante riesca a saturare l'urna elettronica, l'AE cesserà di processare nuovi pacchetti, ma le schede già validate e inserite nella \textit{hash chain} rimarranno matematicamente inalterabili. Il blocco del servizio non conferisce all'avversario alcun privilegio per falsificare le firme sui blocchi pregressi o manomettere i \textit{commitment} pubblicati, garantendo l'assoluta preservazione dell'Immutabilità dell'Urna \textbf{[INT-3]}.
+    \item \textbf{Resilienza della Segretezza:} L'esaurimento delle risorse dei server o l'interruzione anomala dei processi non provoca alcuna dispersione di informazioni (\textit{data leak}). Le schede residenti nell'archivio privato dell'AE rimangono sigillate dalla cifratura asimmetrica RSA-OAEP. Anche qualora l'attacco colpisse l'AE durante la delicata fase di decifratura e scrutinio posticipando la pubblicazione dei risultati, la Segretezza della Scheda \textbf{[SEC-1]} non subirebbe alcuna compromissione.
+    \item \textbf{Integrità delle Transazioni in Corso:} Se un pacchetto di voto $M$ è in transito nel momento in cui il server subisce un \textit{crash} o la connessione TLS subisce un \textit{timeout}, l'AE non farà in tempo ad aggiornare la \textit{hash chain} né a emettere la ricevuta crittografica $R$. In assenza di tale ricevuta, lo stato del sistema rimane coerente: per il protocollo, l'elettore non ha votato. Al ripristino del servizio, l'elettore potrà ritrasmettere la scheda utilizzando un nuovo \textit{nonce} $\eta$ e una nuova chiave effimera $PR_v$, senza che ciò comporti conflitti o violazioni della Singolarità del Voto \textbf{[UNIQ-1]}.
+\end{itemize}
+
+In conclusione, l'attacco DoS pur rappresentando una minaccia effettiva per l'efficienza temporale delle elezioni, risulta del tutto ininfluente dal punto di vista della corruzione dell'esito elettorale e della privacy degli utenti.
+
+\subsection{Falsario}
+\label{subsec:3.2.3_falsario}
+
+Il Falsario è un avversario attivo esterno, dotato di notevoli capacità computazionali e profonda conoscenza degli algoritmi utilizzati. A differenza dell'avversario di rete, il Falsario non si limita a intercettare o bloccare il traffico, ma agisce in prima persona tentando di interagire con il sistema per aggirare i meccanismi di validazione. Il suo scopo è corrompere l'urna elettronica sottomettendo schede malformate o forzando l'accettazione di voti illegittimi pur non possedendo credenziali valide o accessi amministrativi. 
+
+L'architettura del protocollo neutralizza questo avversario sfruttando l'impossibilità computazionale di forzare le primitive crittografiche adottate (Assunzione 5 del WP1):
+
+\paragraph{Tentativo di contraffazione dell'autorizzazione:} L'attaccante potrebbe tentare di generare autonomamente un certificato pseudonimo $C_p$ associato a una propria chiave effimera $PU_v$, per poter poi inviare schede valide all'urna. Questo vettore d'attacco viene neutralizzato dalla verifica della firma digitale apposta dal Sistema di Autenticazione (SA). Non conoscendo la chiave privata istituzionale $PR_{SA}$, il Falsario non può produrre una firma valida sul certificato. Il tentativo verrebbe immediatamente scartato dall'Autorità Elettorale (AE) durante la \textit{Verifica Autorizzazione} della Fase 3, preservando l'Inviolabilità delle Credenziali \textbf{[AUTH-2]}.
+
+\paragraph{Sottomissione di schede arbitrarie o malformate:} Avendo a disposizione la chiave pubblica dell'elezione $PU_{ele}$, il Falsario potrebbe cifrare valori fuori dominio (es. un intero negativo o superiore a $N$) oppure manipolare il \textit{padding} OAEP nel tentativo di innescare anomalie nel calcolo dei risultati. Questo attacco si scontra con due barriere strutturali:
+\begin{itemize}
+    \item \textbf{Integrità del pacchetto:} Qualsiasi pacchetto sottomesso deve superare il controllo \textit{Encrypt-then-Sign} \textbf{[INT-1]}. L'AE accetterà il ciphertext $C$ unicamente se accompagnato da una firma effimera $\sigma$ formalmente corretta e ancorata a un certificato $C_p$ valido, impedendo l'inserimento di schede "orfane".
+    \item \textbf{Validazione algebrica (Scrutinio):} Qualora il Falsario riuscisse a impadronirsi temporaneamente del dispositivo di un utente onesto (sfruttandone il $C_p$ legittimo) per inviare un voto strutturalmente non valido ($i_j \notin [1, N]$), la corruzione dell'esito finale è comunque impedita. Durante la fase di scrutinio, l'AE decifra la scheda ed esegue un controllo di conformità sul \textit{plaintext}. Il voto fuori dominio viene classificato tramite un record di invalidazione pubblico (es. \texttt{OUT\_OF\_RANGE}), escludendolo dal conteggio matematico \textbf{[INT-2]} e disinnescando l'attacco logico.
+\end{itemize}
+
+L'analisi conferma che, finché gli schemi RSA hash-and-sign e RSA-OAEP mantengono la loro robustezza crittografica, le risorse del Falsario non sono sufficienti per produrre input malevoli accettabili dall'infrastruttura.
+
+\subsection{Elettore Disonesto (Impostore)}
+\label{subsec:3.2.4_elettore_disonesto}
+
+L'Elettore Disonesto (o Impostore) rappresenta una minaccia attiva interna o parzialmente esterna, dotata di credenziali di accesso legittime o sottratte, che conosce le procedure di voto ma non possiede privilegi di amministrazione sull'infrastruttura centrale. I suoi obiettivi principali consistono nel forzare il sistema per esprimere voti multipli, sostituirsi a un altro avente diritto o estrarre una prova crittografica della propria preferenza per scopi di coercizione retroattiva o voto di scambio. 
+
+L'architettura del protocollo neutralizza queste minacce attraverso la combinazione di registri di stato logici e vincoli crittografici nativi:
+
+\paragraph{Tentativo di impersonamento (Furto di credenziali):} L'avversario tenta di utilizzare credenziali anagrafiche sottratte a un altro studente per esprimere un voto illegittimo al suo posto. Sebbene la protezione fisica delle credenziali sia delegata all'ambiente esterno e all'Identity Provider dell'Ateneo, il protocollo limita l'impatto di questa frode in Fase 1. Il SA interroga il proprio registro interno prima di emettere il certificato pseudonimo $C_p$, assicurando che ogni identità reale possa ottenere al massimo un singolo token per lo specifico $id_{elezione}$. Se l'impostore vota prima della vittima, il tentativo del legittimo proprietario di accedere al SA genererà un'anomalia procedurale immediata, rendendo rilevante l'attacco. Se invece l'elettore onesto ha già espresso il proprio suffragio, la richiesta dell'impostore verrà rigettata dal SA. Questo meccanismo tutela la regolarità del controllo degli accessi \textbf{[AUTH-1]}.
+
+\paragraph{Tentativo di sottomissione multipla (\textit{Double Voting}):} L'elettore disonesto tenta di aggirare il vincolo ``one-man, one-vote'' inviando più schede all'urna elettronica. Questo attacco viene bloccato in modo deterministico dall'AE in Fase 3 tramite due barriere logiche sequenziali:
+\begin{itemize}
+    \item Se l'elettore tenta di riutilizzare lo stesso certificato pseudonimo $C_p$ per inviare un secondo ciphertext $C'$, l'AE rileva che la chiave pubblica effimera $PU_v$ è già memorizzata nel \texttt{Registro\_Effimeri\_AE}, respingendo la richiesta e preservando la Singolarità del Voto \textbf{[UNIQ-1]}.
+    \item Se l'elettore tenta di richiedere un secondo certificato pseudonimo al SA per ottenere una nuova chiave effimera, il SA blocca la transazione poiché l'anagrafica reale risulta già associata a un rilascio precedente.
+\end{itemize}
+Qualora l'elettore provi a inviare nuovamente lo stesso identico pacchetto, l'attacco decade nelle dinamiche di replay descritte per l'avversario di rete, venendo intercettato dal controllo sul nonce $\eta$ nel \texttt{Registro\_Nonce\_AE} \textbf{[UNIQ-2]}.
+
+\paragraph{Tentativo di estrazione di una ricevuta rivelante (Voto di scambio):} L'elettore disonesto intende collaborare con un coercitore o un acquirente di voti, cercando di ottenere dal sistema una prova crittografica che dimostri inequivocabilmente per quale lista ha votato. Il protocollo neutralizza questo vettore tramite due scelte strutturali definite in Fase 2 e Fase 3:
+\begin{itemize}
+    \item La ricevuta ufficiale $R$ rilasciata dall'AE e firmata con $PR_{AE}$ copre unicamente i parametri offuscati della transazione: $R = \text{Sign}_{PR_{AE}}(H(K_j \parallel F_j \parallel j \parallel id_{elezione}))$. Essa attesta l'avvenuta inclusione della scheda cifrata, ma non espone né il voto in chiaro $i$, né il fattore di randomizzazione $r$ di RSA-OAEP. Di conseguenza, $R$ costituisce una ricevuta non rivelante.
+    \item Al fine di mitigare la coercizione retroattiva, l'applicazione client esegue la cancellazione immediata e irrecuperabile della chiave privata effimera $PR_v$ non appena validata la ricevuta. Privandosi di tale materiale crittografico, l'elettore perde la capacità di dimostrare a posteriori di essere l'autore della firma $\sigma$ posta sul pacchetto inviato nell'urna.
+\end{itemize
+Queste contromisure realizzano la proprietà di Assenza di Ricevuta \textbf{[SEC-3]} a livello di protocollo applicativo, escludendo la possibilità che l'infrastruttura stessa fornisca strumenti validi per il commercio dei suffragi.
+
+\subsection{Coercitore}
+\label{subsec:3.2.5_coercitore}
+
+Il Coercitore rappresenta un avversario attivo o passivo che opera principalmente nel mondo reale, sfruttando il fatto che il voto avviene in un ambiente remoto e non fisicamente controllato. Non possiede privilegi amministrativi sull'infrastruttura e non controlla direttamente i server, ma tenta di forzare o influenzare la volontà dell'elettore tramite minacce, ricatti o incentivi economici (voto di scambio), esigendo una prova del voto espresso.
+
+L'analisi del protocollo mostra come la minaccia sia mitigata efficacemente sul piano digitale, pur mantenendo un limite intrinseco sul piano fisico:
+
+\paragraph{Resilienza alla coercizione retroattiva e al voto di scambio:} In modalità passiva o post-voto, il Coercitore richiede all'elettore di dimostrare a posteriori per quale lista ha espresso la propria preferenza. Il protocollo neutralizza questo attacco bloccando la produzione di prove crittografiche esportabili (proprietà di Assenza di Ricevuta \textbf{[SEC-3]}). La ricevuta crittografica $R$ emessa dall'AE in Fase 3 firma unicamente il \textit{commitment} pubblico $K_j$ e il \textit{fingerprint} $F_j$, omettendo sia la preferenza in chiaro $i$, sia il fattore di randomizzazione $r$ di RSA-OAEP. Inoltre, l'applicazione client cancella immediatamente e in modo irrecuperabile la chiave privata effimera $PR_v$ subito dopo la validazione di $R$. In questo modo, l'elettore si priva della capacità matematica di dimostrare di essere l'autore della firma $\sigma$ associata al pacchetto nell'urna. L'infrastruttura non fornisce quindi alcun elemento utile per convalidare il voto di scambio di fronte a terzi.
+
+\paragraph{Limite strutturale alla coercizione ambientale istantanea:} In modalità attiva, il Coercitore si posiziona fisicamente accanto all'elettore durante l'atto del voto, imponendogli una scelta specifica sotto minaccia diretta. Avendo stabilito in WP2 un modello di voto \textit{one-shot} rigidamente irrevocabile e non modificabile, l'elettore non ha la possibilità di sovrascrivere o annullare la scheda in un secondo momento. Di conseguenza, se la coercizione avviene in tempo reale, l'attacco sul piano fisico va a buon fine.
+
+Per trasparenza progettuale, questo rischio residuo viene accettato ed è giustificato dal contesto operativo. Nello scenario universitario di riferimento, la minaccia di un'estorsione organizzata e sistematica del voto è considerata un rischio contenuto rispetto alle elezioni politiche nazionali. Introdurre meccanismi di revocabilità per contrastare questo attacco avrebbe comportato l'uso di identificativi偏 persistent, compromettendo lo pseudo-anonimato \textbf{[SEC-2]} e violando il vincolo di efficienza complessiva del sistema. Il protocollo adotta quindi un compromesso che privilegia la robustezza crittografica e la linearità del flusso.
+
+\subsection{Sistema di Autenticazione Disonesto}
+\label{subsec:3.2.6_sa_disonesto}
+
+Il Sistema di Autenticazione (SA) Disonesto configura una minaccia interna (\textit{insider threat}) di tipo sia attivo che passivo. Operando dall'interno del perimetro di gestione, questo avversario possiede il controllo completo sulla verifica delle identità anagrafiche e detiene la chiave privata istituzionale $PR_{SA}$ per l'emissione dei token di abilitazione. Tuttavia, il suo raggio d'azione rimane rigidamente circoscritto dall'architettura del protocollo: il SA non ha alcun potere di gestione sull'urna elettronica, non può accedere in alcun modo all'archivio privato dell'AE e non conosce la chiave privata dell'elezione $PR_{ele}$ necessaria per decifrare i singoli voti.
+
+L'analisi del protocollo evidenzia l'efficacia delle contromisure applicative rispetto ai due vettori d'attacco considerati:
+
+\paragraph{Attacco passivo (Tentativo di de-anonimizzazione):} In modalità passiva, il SA tenta di rompere il vincolo di riservatezza incrociando i dati anagrafici degli studenti che effettuano l'accesso in Fase 1 con le schede cifrate che appaiono nell'urna pubblica gestita dall'AE. Se l'intera procedura di sottomissione avvenisse in tempo reale, una semplice correlazione temporale consentirebbe di associare l'identità reale al voto. Il protocollo neutralizza questa minaccia combinando due difese strutturali introdotte nel WP2:
+\begin{itemize}
+    \item \textbf{Timestamp a bassa risoluzione:} Il certificato pseudonimo $C_p$ rilasciato dal SA non contiene l'orario esatto di validazione, bensì il parametro $t_{finestra}$. Questo riduce deliberatamente la precisione del dato temporale a disposizione dell'AE o di un osservatore esterno.
+    \item \textbf{Pubblicazione per finestre:} L'AE differisce la pubblicazione dei record sul registro append-only pubblico. Le schede vengono aggregate e pubblicate per blocchi a scadenze prefissate, spezzando la correlazione temporale diretta tra il momento dell'autenticazione presso il SA e l'apparizione del voto nell'urna.
+\end{itemize}
+Di conseguenza, finché viene rispettata l'Assunzione 1 di non-collusione, il SA da solo non può associare l'identità dell'elettore alla preferenza espressa, preservando la proprietà di Pseudo-anonimato \textbf{[SEC-2]}.
+
+\paragraph{Attacco attivo (Manipolazione degli accessi):} In modalità attiva, il SA devia intenzionalmente dalle regole del protocollo per alterare la regolarità della partecipazione elettorale attraverso due azioni distinte:
+\begin{itemize}
+    \item \textbf{Esclusione illegittima di aventi diritto:} Il SA si rifiuta arbitrariamente di rilasciare il certificato $C_p$ a uno studente legittimo, impedendogli di votare. Questo attacco costituisce una violazione locale della proprietà \textbf{[AUTH-1]} e della completezza del sistema. Trattandosi di un'architettura con un Identity Provider centralizzato, tale rischio è intrinseco e viene mitigato solo sul piano procedurale esterno al protocollo crittografico (tramite la verifica dei log di sistema d'Ateneo a seguito di una contestazione formale dell'utente).
+    \item \textbf{Abilitazione di soggetti non autorizzati (\textit{Phantom Voting}):} Il SA genera intenzionalmente certificati $C_p$ validi per utenti non aventi diritto o per identità fittizie, immettendo chiavi effimere non legittime nel sistema. Poiché l'AE in Fase 3 si limita a validare la firma crittografica dell'IdP ($Sign_{PR_{SA}}$), queste schede supereranno i controlli e verranno inserite nell'urna. Questo attacco viola attivamente la Verifica del diritto di voto \textbf{[AUTH-1]}. La contromisura risiede nel bilanciamento numerico dello scrutinio finale: il numero totale di certificati emessi dal SA (reso pubblico a fine elezione) deve coincidere rigorosamente con il contatore delle schede totali registrate nell'urna pubblica ($k_{totale}$), rendendo immediatamente rilevabile l'immissione arbitraria di voti artificiali.
+\end{itemize}
+
+\subsection{Autorità Elettorale Disonesta}
+\label{subsec:3.2.7_ae_disonesta}
+
+L'Autorità Elettorale (AE) Disonesta costituisce la minaccia interna (\textit{insider threat}) con il più ampio raggio d'azione e controllo sui dati memorizzati all'interno del sistema. Avendo in custodia l'infrastruttura che ospita l'urna digitale, la bacheca pubblica e i registri privati, questo avversario dispone sia della chiave privata dell'elezione $PR_{ele}$ (per la decifratura) sia della chiave privata dell'AE $PR_{AE}$ (per la firma dei blocchi). Il suo obiettivo primario consiste nel falsare l'esito della consultazione alterando il conteggio finale, scartando schede valide o immettendo preferenze arbitrarie. Nonostante l'ampio livello di privilegio, l'architettura del protocollo limita e rende rilevabili i suoi tentativi di frode:
+
+\paragraph{Attacco passivo (Monitoraggio preventivo delle preferenze):} In modalità passiva, l'AE potrebbe abusare della chiave privata $PR_{ele}$ decifrando le schede $C_j$ in anticipo rispetto alla chiusura formale delle urne, monitorando l'andamento in tempo reale delle votazioni. Tuttavia, a livello logico, l'AE non dispone delle informazioni necessarie per collegare una specifica scheda cifrata alla persona reale che l'ha inviata, poiché l'anagrafica è nota esclusivamente al SA. Inoltre, la correlazione temporale basata sui metadati di rete viene contrastata dall'inserimento del timestamp a bassa risoluzione $t_{finestra}$ nel certificato pseudonimo $C_p$ e dalla pubblicazione differita per blocchi aggregati nell'urna pubblica. Di conseguenza, l'attacco passivo non consente la de-anonimizzazione degli utenti, preservando la proprietà di Pseudo-anonimato \textbf{[SEC-2]} sotto l'ipotesi di non-collusione.
+
+\paragraph{Attacco attivo (Cancellazione o alterazione retroattiva dei voti):} L'AE potrebbe tentare di eliminare dal proprio database privato le schede cifrate $C_j$ favorevoli a una lista avversaria o di sostituirle con crittogrammi manipolati prima dello spoglio. Questa manomissione viene intercettata grazie alla struttura crittografica dell'urna pubblica:
+\begin{itemize}
+    \item \textbf{Vincolo del commitment:} In Fase 3, l'AE pubblica nella \textit{hash chain} il valore $K_j=H(C_j)$. Questo parametro agisce come un vincolo immutabile (\textit{binding}). Qualsiasi alterazione o sostituzione successiva del ciphertext $C_j$ nel database privato produrrebbe un hash differente, rompendo il legame logico con il record pubblico.
+    \item \textbf{Integrità sequenziale e firme:} Se l'AE tentasse di modificare direttamente un record passato all'interno della \textit{hash chain} per far combaciare l'hash, l'effetto valanga della funzione SHA-256 invaliderebbe l'hash pointer del blocco successivo $H(Record_{j+1})$ e tutte le firme successive. Per nascondere l'azione, l'AE dovrebbe rigenerare e rifirmare l'intera catena fino al blocco di chiusura. Tuttavia, una simile alterazione retroattiva verrebbe immediatamente scoperta dagli elettori onesti tramite la \textit{Verifica Individuale} \textbf{[VER-1]}. L'utente, confrontando il proprio indice progressivo $j$ e il \textit{commitment} ricalcolato con i dati presenti nell'urna pubblica, rileverebbe l'assenza o la modifica del proprio voto, attivando un audit procedurale formale. L'architettura garantisce così la rilevabilità delle modifiche, soddisfacendo la proprietà di Immutabilità dell'Urna \textbf{[INT-3]}.
+\end{itemize}
+
+\paragraph{Attacco attivo (Immissione di voti fittizi o manipolazione dello scrutinio):} L'AE potrebbe provare a inserire schede fittizie cifrate nell'urna per gonfiare il risultato di un candidato o barare direttamente sul computo del documento di scrutinio finale $Doc_{finale}$.
+\begin{itemize}
+    \item \textbf{Iniezione di schede artificiali:} Per inserire un blocco valido nella \textit{hash chain}, il pacchetto deve superare i controlli crittografici, richiedendo una firma applicativa $\sigma$ valida e un certificato pseudonimo $C_p$ emesso dal SA. Non potendo falsificare la firma del SA ($PR_{SA}$), l'AE non può generare autonomamente certificati legittimi. Un'immissione abusiva di schede prive di $C_p$ verrebbe rilevata da un revisore esterno durante il controllo di conformità del registro, preservando la proprietà \textbf{[AUTH-1]} e \textbf{[INT-2]}.
+    \item \textbf{Manipolazione del conteggio:} Poiché la decifratura RSA-OAEP avviene in un ambiente isolato (\textit{black-box}) controllato dall'AE, quest'ultima mantiene la capacità tecnica di pubblicare un risultato aggregato nel $Doc_{finale}$ non corrispondente alla realtà dei ciphertext archiviati. Questo rappresenta il limite strutturale del protocollo rispetto alla Verificabilità Universale piena \textbf{[VER-2]}, discusso dettagliatamente nelle sezioni successive. Tuttavia, il margine di frode dell'AE è fortemente limitato dalla contromisura dell'audit procedurale subordinato: un comitato di revisori terzi può accedere all'archivio privato, verificare l'uguaglianza $K_j=H(C_j)$ per ogni scheda e ripetere lo spoglio in modo indipendente, garantendo una rilevabilità totale dei brogli in sede di ispezione.
+\end{itemize}
+
+% --- PARTE 2: ANALISI DELLE VULNERABILITA' ACCETTATE ---
+% Qui analizziamo i famosi stati "Parziali" della matrice di tracciabilità del WP2,
+% dimostrando maturità nell'accettare il rischio residuo.
+\section{Analisi dei Rischi Residui e dei Limiti Strutturali}
+\label{sec:3.3_rischi_residui}
+
+\subsection{Il limite della Segretezza Assoluta [SEC-1]}
+\label{subsec:3.3.1_limite_sec1}
+
+\subsection{Il limite della Verificabilità Universale [VER-2]}
+\label{subsec:3.3.2_limite_ver2}
+
+\subsection{Vulnerabilità alla coercizione ambientale pre-voto}
+\label{subsec:3.3.3_vulnerabilita_coercizione}
+
+% --- PARTE 3: LA RISPOSTA DIRETTA ALLA TRACCIA ---
+% Risponde esattamente alla richiesta: "verificare che non ci siano ovvie 
+% modifiche che portino benefici senza alcuna perdita in altre".
+\section{Analisi dei Trade-off: Impossibilità di miglioramenti a costo zero}
+\label{sec:3.4_analisi_tradeoff}
+
+\subsection{Trade-off 1: Revocabilità del voto vs. Efficienza e Pseudo-anonimato}
+\label{subsec:3.4.1_tradeoff_revocabilita}
+
+\subsection{Trade-off 2: Scrutinio Verificabile vs. Sovraccarico Infrastrutturale}
+\label{subsec:3.4.2_tradeoff_scrutinio}
+
+\subsection{Trade-off 3: Ritardo di Pubblicazione vs. Traffic Analysis}
+\label{subsec:3.4.3_tradeoff_traffic_analysis}
