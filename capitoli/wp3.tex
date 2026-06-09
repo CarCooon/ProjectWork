@@ -154,14 +154,65 @@ L'Autorità Elettorale (AE) Disonesta costituisce la minaccia interna (\textit{i
 \section{Analisi dei Rischi Residui e dei Limiti Strutturali}
 \label{sec:3.3_rischi_residui}
 
+Per garantire la massima trasparenza progettuale, la presente sezione esamina i limiti strutturali del protocollo. Come anticipato in fase di modellazione (WP1) e progettazione (WP2), alcune garanzie crittografiche non possono essere soddisfatte in modo assoluto senza violare i vincoli di efficienza o senza ricorrere a soluzioni complesse per lo scenario di riferimento. Vengono qui discussi i rischi residui accettati e le relative contromisure.
+
 \subsection{Il limite della Segretezza Assoluta [SEC-1]}
 \label{subsec:3.3.1_limite_sec1}
+
+Il protocollo non soddisfa il requisito di Segretezza della Scheda \textbf{[SEC-1]} in modo assoluto (\textit{trustless}). Affinché la segretezza fosse assoluta, il contenuto del voto dovrebbe rimanere matematicamente inaccessibile a chiunque, inclusa l'Autorità Elettorale. Tuttavia, poiché lo schema di cifratura adottato (RSA-OAEP) non consente di eseguire operazioni matematiche direttamente sui dati cifrati, il conteggio aggregato non può essere eseguito direttamente sui crittogrammi. Di conseguenza, l'AE è strutturalmente costretta a decifrare le singole schede in chiaro all'interno del proprio ambiente isolato per poter eseguire lo scrutinio.
+
+Il rischio che l'AE possa leggere i voti individuali viene accettato e gestito attraverso due garanzie procedurali e strutturali:
+\begin{itemize}
+    \item \textbf{Limitazione temporale e di accesso:} L'accesso al \textit{plaintext} è circoscritto esclusivamente alla fase di chiusura delle urne e riservato all'AE in veste di autorità istituzionale fidata.
+    \item \textbf{Assenza di associazione identitaria:} Pur potendo leggere la preferenza, l'AE non dispone del certificato $C_p$ in chiaro né delle informazioni anagrafiche, preservando lo pseudo-anonimato \textbf{[SEC-2]} finché permane l'assunzione di non-collusione con il SA.
+\end{itemize}
+L'adozione di soluzioni crittografiche avanzate atte a risolvere questa criticità (come la cifratura omomorfica additiva, la decifratura a soglia o l'impiego di una \textit{mix-net} verificabile) è stata scartata in quanto avrebbe comportato un sovraccarico computazionale e infrastrutturale incompatibile con gli obiettivi di efficienza del progetto.
 
 \subsection{Il limite della Verificabilità Universale [VER-2]}
 \label{subsec:3.3.2_limite_ver2}
 
+L'architettura dell'urna pubblica garantisce l'immutabilità della sequenza temporale e permette la verifica dell'inclusione dei voti \textbf{[VER-1]}, ma non supporta una Verificabilità Universale \textbf{[VER-2]} piena. Un osservatore esterno indipendente, scaricando i dati pubblici a fine elezione, può convalidare le firme dell'AE e ricalcolare la \textit{Merkle Root}, ma non possiede gli elementi crittografici (ovvero i \textit{ciphertext} $C_j$ archiviati privatamente e la chiave privata $PR_{ele}$) necessari per dimostrare matematicamente che il risultato aggregato pubblicato nel $Doc_{finale}$ corrisponda all'effettivo contenuto dell'urna.
+
+Per compensare l'impossibilità di uno scrutinio crittograficamente aperto a chiunque, il protocollo introduce una soluzione basata sull'audit procedurale subordinato:
+\begin{itemize}
+    \item \textbf{Audit istituzionale indipendente:} Un comitato di revisori terzi autorizzati può ricevere accesso temporaneo all'archivio privato dell'AE. In questa sede, i revisori possono ricalcolare l'hash di ogni scheda cifrata archiviata, verificare l'uguaglianza $K_j=H(C_j)$ rispetto al parametro vincolante pubblicato nell'urna pubblica e, disponendo temporaneamente dell'ambiente di decifratura, ripetere lo spoglio in modo indipendente.
+\end{itemize}
+Tale procedura non fornisce una prova matematica diretta a disposizione del pubblico, ma garantisce che ogni alterazione del conteggio da parte dell'AE risulti sistematicamente rilevabile in sede di ispezione.
+
+\subsection{Il limite della Conformità della Scheda [INT-2]}
+\label{subsec:3.3.3_limite_int2}
+
+La proprietà di Conformità della Scheda \textbf{[INT-2]} è realizzata in modo parziale poiché il controllo sul contenuto del voto non può essere eseguito all'atto della sottomissione. Non potendo utilizzare prove a conoscenza zero (\textit{Zero-Knowledge Proofs}) sul client per non sovraccaricare l'applicazione d'Ateneo, l'AE accetta inizialmente qualsiasi stringa cifrata purché sia firmata correttamente. La verifica sul dominio del voto ($1 \le i_j \le N$) viene quindi posticipata alla fase di spoglio.
+
+Il rischio residuo è che un elettore disonesto invii intenzionalmente un voto malformato per tentare di alterare l'algoritmo di calcolo. Questa criticità viene gestita tramite una contromisura logica: durante lo scrutinio isolato, l'AE scarta le schede non conformi contrassegnandole pubblicamente con un record di errore. Poiché l'intera procedura dipende dall'onesta esecuzione del filtro da parte dell'AE, l'ispezione finale dei revisori terzi (audit) garantisce che nessuna scheda valida sia stata arbitrariamente scartata o che voti nulli siano stati conteggiati nel totale.
+
+\subsection{Il vincolo di Immutabilità Condizionata [INT-3]}
+\label{subsec:3.3.4_vincolo_int3}
+
+La proprietà di Immutabilità dell'Urna \textbf{[INT-3]} è definita condizionale in quanto la sua tenuta matematica non è autonoma, ma è subordinata a due fattori esterni al protocollo applicativo:
+\begin{itemize}
+    \item \textbf{Segretezza del materiale crittografico centrale:} La struttura a \textit{hash chain} impedisce modifiche retroattive invisibili, ma se la chiave privata $PR_{AE}$ venisse compromessa, un attaccante potrebbe rigenerare l'intera catena inserendo firme coerenti sui blocchi manipolati.
+    \item \textbf{Partecipazione attiva degli utenti:} La rilevabilità dei brogli non è automatica. Se l'AE alterasse l'urna, l'attacco verrebbe alla luce solo se gli elettori eseguissero effettivamente la \textit{Verifica Individuale} \textbf{[VER-1]} confrontando la propria ricevuta con i dati pubblicati.
+\end{itemize}
+La soluzione adottata consiste nel blindare i server dell'AE tramite i sistemi di sicurezza perimetrale d'Ateneo e nell'incentivare la procedura di controllo da parte degli studenti al termine delle votazioni.
+
+\subsection{La dipendenza dalla Non-Collusione per lo Pseudo-anonimato [SEC-2]}
+\label{subsec:3.3.5_vincolo_sec2}
+
+La proprietà di Pseudo-anonimato \textbf{[SEC-2]} è strettamente condizionale poiché dipende interamente dall'Assunzione 1 del WP1: la totale assenza di collusione tra il Sistema di Autenticazione (SA) e l'Autorità Elettorale (AE). 
+
+L'architettura separa nettamente le funzioni (il SA conosce le identità reali ma non vede i voti; l'AE vede i voti ma riceve solo certificati pseudonimi $C_p$). Tuttavia, se i gestori dei due server decidessero di cooperare in modo disonesto, l'anonimato decadrebbe istantaneamente. Al SA basterebbe fornire all'AE il registro delle associazioni temporali o dei metadati di rete (es. indirizzi IP) per consentire l'incrocio dei dati e identificare l'autore di ogni singola scheda cifrata.
+
+Questo rischio residuo viene accettato in virtù del contesto universitario. La separazione organizzativa e logica dei due server all'interno dell'infrastruttura d'Ateneo, combinata con il tracciamento dei log di accesso indipendenti, rende la collusione un evento a bassissima probabilità e facilmente identificabile in sede di ispezione successiva.
+
 \subsection{Vulnerabilità alla coercizione ambientale pre-voto}
-\label{subsec:3.3.3_vulnerabilita_coercizione}
+\label{subsec:3.3.6_vulnerabilita_coercizione}
+
+L'architettura è intrinsecamente vulnerabile a un attacco di coercizione fisica esercitata in tempo reale. Se un coercitore si posiziona fisicamente al fianco dell'elettore nel momento esatto in cui quest'ultimo inserisce la propria preferenza, le barriere crittografiche del protocollo risultano inefficaci. 
+
+Essendo il protocollo modellato secondo un paradigma logico \textit{one-shot}, il voto inviato è considerato definitivo, non revocabile e non sovrascrivibile. L'elettore coartato non dispone di alcun meccanismo per annullare la scheda compromessa ed esprimerne successivamente una valida in condizioni di sicurezza.
+
+Questo limite costituisce una vulnerabilità strutturale nota e intenzionalmente accettata. Come analizzato nel WP1, l'introduzione di un meccanismo di revocabilità del voto avrebbe imposto l'adozione di identificativi persistenti per incrociare le sottomissioni dello stesso utente, indebolendo drasticamente la tenuta dello pseudo-anonimato \textbf{[SEC-2]} e introducendo una complessità architetturale in grado di violare il vincolo primario di efficienza. Nello specifico scenario accademico di riferimento, il rischio di un'estorsione del voto organizzata e sistematica viene valutato come sufficientemente contenuto da giustificare questo compromesso in favore della leggerezza del protocollo e della protezione assoluta dell'identità dell'elettore.
 
 % --- PARTE 3: LA RISPOSTA DIRETTA ALLA TRACCIA ---
 % Risponde esattamente alla richiesta: "verificare che non ci siano ovvie 
