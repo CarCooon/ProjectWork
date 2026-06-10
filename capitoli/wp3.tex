@@ -194,7 +194,7 @@ La proprietà di Immutabilità dell'Urna \textbf{[INT-3]} è definita condiziona
     \item \textbf{Segretezza del materiale crittografico centrale:} La struttura a \textit{hash chain} impedisce modifiche retroattive invisibili, ma se la chiave privata $PR_{AE}$ venisse compromessa, un attaccante potrebbe rigenerare l'intera catena inserendo firme coerenti sui blocchi manipolati.
     \item \textbf{Partecipazione attiva degli utenti:} La rilevabilità dei brogli non è automatica. Se l'AE alterasse l'urna, l'attacco verrebbe alla luce solo se gli elettori eseguissero effettivamente la \textit{Verifica Individuale} \textbf{[VER-1]} confrontando la propria ricevuta con i dati pubblicati.
 \end{itemize}
-La soluzione adottata consiste nel blindare i server dell'AE tramite i sistemi di sicurezza perimetrale d'Ateneo e nell'incentivare la procedura di controllo da parte degli studenti al termine delle votazioni.
+La soluzione adottata consiste nel proteggere i server dell'AE tramite i sistemi di sicurezza d'Ateneo e nel promuovere la procedura di controllo da parte degli studenti al termine delle votazioni.
 
 \subsection{La dipendenza dalla Non-Collusione per lo Pseudo-anonimato [SEC-2]}
 \label{subsec:3.3.5_vincolo_sec2}
@@ -205,7 +205,7 @@ L'architettura separa nettamente le funzioni (il SA conosce le identità reali m
 
 Questo rischio residuo viene accettato in virtù del contesto universitario. La separazione organizzativa e logica dei due server all'interno dell'infrastruttura d'Ateneo, combinata con il tracciamento dei log di accesso indipendenti, rende la collusione un evento a bassissima probabilità e facilmente identificabile in sede di ispezione successiva.
 
-\subsection{Vulnerabilità alla coercizione ambientale pre-voto}
+\subsection{Il limite dell'Assenza di Ricevuta e Coercizione Ambientale [SEC-3]}
 \label{subsec:3.3.6_vulnerabilita_coercizione}
 
 L'architettura è intrinsecamente vulnerabile a un attacco di coercizione fisica esercitata in tempo reale. Se un coercitore si posiziona fisicamente al fianco dell'elettore nel momento esatto in cui quest'ultimo inserisce la propria preferenza, le barriere crittografiche del protocollo risultano inefficaci. 
@@ -217,14 +217,49 @@ Questo limite costituisce una vulnerabilità strutturale nota e intenzionalmente
 % --- PARTE 3: LA RISPOSTA DIRETTA ALLA TRACCIA ---
 % Risponde esattamente alla richiesta: "verificare che non ci siano ovvie 
 % modifiche che portino benefici senza alcuna perdita in altre".
+\clearpage
 \section{Analisi dei Trade-off: Impossibilità di miglioramenti a costo zero}
 \label{sec:3.4_analisi_tradeoff}
+
+La presente sezione dimostra l'assenza di modifiche architetturali ovvie che possano apportare un beneficio a una singola proprietà di sicurezza senza causare un contestuale degrado in un'altra area del protocollo o senza violare il vincolo di efficienza computazionale e prestazionale per lo scenario di riferimento.
 
 \subsection{Trade-off 1: Revocabilità del voto vs. Efficienza e Pseudo-anonimato}
 \label{subsec:3.4.1_tradeoff_revocabilita}
 
+Come anticipato nelle fasi di modellazione, il sistema non consente all'elettore di sovrascrivere o annullare un voto già espresso, seguendo un paradigma \textit{one-shot}.
+
+\paragraph{Vantaggio mancato:} Introdurre un meccanismo di revocabilità del voto offrirebbe una forte mitigazione contro gli attacchi di coercizione fisica \textit{pre-voto} e il voto di scambio estemporaneo. L'elettore coartato potrebbe infatti esprimere una preferenza dettata dal coercitore e, in un secondo momento e in condizioni di sicurezza, annullare tale scheda sottomettendo la sua vera preferenza.
+
+\paragraph{Costo architetturale inaccettabile:} Per implementare la sostituzione del voto, l'architettura dovrebbe necessariamente possedere un meccanismo logico per collegare le diverse sottomissioni al medesimo utente, al fine di individuare e scartare le schede obsolete prima dello scrutinio. Questo richiederebbe l'impiego di identificativi persistenti associati all'elettore, comportando rischi rilevanti per l'intera architettura:
+\begin{itemize}
+    \item \textbf{Collasso dello Pseudo-anonimato [SEC-2]:} L'introduzione di credenziali di aggiornamento persistenti creerebbe un legame tracciabile tra l'identità dell'elettore (verificata dal SA) e il record nell'urna pubblica, eliminando la natura condizionale della proprietà e compromettendola definitivamente.
+    \item \textbf{Crollo dell'efficienza globale:} Gestire la storicizzazione, l'annullamento e l'aggiornamento dei \textit{ciphertext} comporterebbe un sovraccarico transazionale e logico incompatibile con i requisiti di leggerezza stabiliti.
+\end{itemize}
+Pertanto, la rigidità \textit{one-shot} costituisce una limitazione necessaria per la tutela incondizionata della privacy e per il contenimento dei costi elaborativi.
+
 \subsection{Trade-off 2: Scrutinio Verificabile vs. Sovraccarico Infrastrutturale}
 \label{subsec:3.4.2_tradeoff_scrutinio}
 
+L'architettura proposta demanda la decifratura e il calcolo del risultato all'interno di un ambiente isolato gestito dall'AE, accettando le limitazioni strutturali introdotte per la segretezza \textbf{[SEC-1]} e la conformità delle schede \textbf{[INT-2]}.
+
+\paragraph{Vantaggio mancato:} Adozione di cifratura omomorfica additiva o di sistemi di decifratura distribuita (Threshold Decryption) abbinati a prove a conoscenza zero (ZKP) sul client. Queste tecnologie garantirebbero la proprietà di Verificabilità Universale piena \textbf{[VER-2]}, di Segretezza \textbf{[SEC-1]} e di Conformità della Scheda \textbf{[INT-2]} all'atto dell'invio, senza richiedere assunzioni di fiducia e senza posticipare i controlli alla fase di spoglio.
+
+\paragraph{Costo architetturale inaccettabile:} L'inserimento di primitive omomorfiche e ZKP trasforma radicalmente il carico del sistema:
+\begin{itemize}
+    \item \textbf{Complessità di calcolo:} I tempi di elaborazione per la generazione delle prove sul dispositivo dell'utente e per l'aggregazione omomorfica lato server crescono in modo insostenibile su ampi volumi di votanti, richiedendo risorse hardware dedicate non in linea con i vincoli del progetto.
+    \item \textbf{Sovraccarico infrastrutturale:} La frammentazione del materiale crittografico tra più server indipendenti (per evitare l'accentramento di potere in un'unica entità AE) impone un sovraccarico sistemico elevato e costi di manutenzione sproporzionati rispetto alle esigenze di una consultazione accademica.
+\end{itemize}
+L'accettazione dello scrutinio centralizzato (affiancato dall'audit istituzionale indipendente) giustifica il carattere parziale di \textbf{[SEC-1]} e \textbf{[INT-2]} in favore del mantenimento del vincolo primario di efficienza globale.
+
 \subsection{Trade-off 3: Ritardo di Pubblicazione vs. Traffic Analysis}
 \label{subsec:3.4.3_tradeoff_traffic_analysis}
+
+Il protocollo prevede che i record non vengano esposti nell'urna in tempo reale subito dopo l'accettazione, ma a intervalli differiti e aggregati (pubblicazione per finestre).
+
+\paragraph{Vantaggio mancato:} L'adozione di un registro di pubblicazione istantaneo consentirebbe all'utente una Verifica Individuale \textbf{[VER-1]} immediata, riducendo le latenze di attesa per la conferma finale dell'operazione.
+
+\paragraph{Costo architetturale inaccettabile:} La scrittura istantanea dei blocchi esporrebbe il sistema a un'analisi temporale della rete (\textit{Traffic Analysis}).
+\begin{itemize}
+    \item \textbf{Esposizione allo Pseudo-anonimato [SEC-2]:} L'intervallo tra il momento dell'autenticazione presso il SA e l'apparizione esatta della nuova riga nel database pubblico (AE) fornirebbe ai gestori di rete i metadati necessari per unire il traffico e risalire al mittente. 
+\end{itemize}
+L'introduzione della pubblicazione per blocchi differiti sacrifica una porzione di feedback immediato dell'utente in cambio della protezione da un'analisi temporale che metterebbe a rischio la tenuta condizionale dello pseudo-anonimato \textbf{[SEC-2]}.
