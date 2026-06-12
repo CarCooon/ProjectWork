@@ -65,6 +65,22 @@ $R$ & Ricevuta crittografica. & Rilasciata dall'AE e firmata con $PR_{AE}$ per a
 \textbf{Nota fondamentale sulle firme digitali:} Per aderire correttamente ai requisiti di sicurezza ed evitare le vulnerabilità delle firme RSA applicate direttamente al messaggio, si specifica che le firme digitali del protocollo (come $\sigma$ ed $R$) sono implementate secondo lo schema \textbf{hash-and-sign}. I dati oggetto della firma vengono preventivamente compressi tramite la funzione hash crittografica $H(\cdot)$ (SHA-256), e solo il digest risultante viene firmato tramite la chiave privata RSA. In nessuna fase dell'infrastruttura viene impiegata la firma RSA \textit{textbook} applicata direttamente al dato in chiaro.
 
 \clearpage
+\section{Registrazione e autenticazione degli elettori}
+\label{sec:autenticazione_elettori}
+
+Il protocollo realizza l'autenticazione degli elettori secondo il modello di \textit{federated identity}, scelta naturale nel contesto d'Ateneo, che dispone già di un \textit{Identity Provider} (IdP) istituzionale e di un servizio di \textit{Single Sign-On} (SSO) per le proprie utenze.
+
+\paragraph{Identity proofing ereditato.} Coerentemente con il modello NIST SP~800-63, si distingue l'\textit{identity proofing} (accertamento iniziale di chi è il soggetto) dall'\textit{authentication} (prova di controllo dell'autenticatore). Il proofing è interamente ereditato dall'Ateneo, che lo effettua all'immatricolazione: il SA non lo ripete e si limita ad autenticare l'elettore e a verificarne l'eleggibilità.
+
+\paragraph{Autenticazione federata e ruolo del SA.} L'elettore si autentica tramite l'SSO d'Ateneo basato su OpenID Connect (OIDC), il livello di identità costruito sopra OAuth~2.0. Rispetto a tale flusso il SA agisce da \textit{Relying Party}: delega la verifica delle credenziali all'IdP istituzionale e ne riceve un \textit{ID~Token} firmato che attesta identità ed eleggibilità dell'utente. Il SA non gestisce quindi le password e non è esso stesso l'IdP, ma è l'autorità di pseudonimizzazione che, a valle dell'autenticazione, emette il certificato $C_p$. In questa prospettiva $C_p$ è assimilabile a un \textit{capability token}: l'elettore si autentica \textit{per identità} verso il SA, ma verso l'AE si presenta \textit{per autorizzazione}, esibendo $C_p$ senza mai rivelare l'anagrafica.
+
+\paragraph{Autenticazione a più fattori.} Trattandosi di un'operazione ad alto valore, l'accesso al voto richiede l'autenticazione a più fattori (MFA) offerta dall'IdP, preferibilmente con un autenticatore FIDO2/WebAuthn resistente al \textit{phishing}. La misura neutralizza gli attacchi tipici contro le credenziali (\textit{password spraying}, \textit{credential stuffing}, furto di credenziali), rafforzando le proprietà [AUTH-1] e [AUTH-2]. Agendo esclusivamente sul lato SA, che conosce comunque l'identità reale dell'elettore, l'MFA non incide in alcun modo sullo pseudo-anonimato [SEC-2].
+
+\paragraph{Prova di possesso della chiave effimera.} L'emissione di $C_p$ è subordinata a una verifica di \textit{proof-of-possession} secondo il paradigma \textit{challenge-response}: il SA invia un \textit{nonce} casuale, l'elettore lo firma con $PR_v$ e il SA ne valida la firma con $PU_v$ prima di rilasciare il certificato. Replicando la \textit{registration ceremony} di FIDO2, il meccanismo impedisce la certificazione di una chiave pubblica di cui il richiedente non detenga la corrispondente chiave privata, completando la proprietà [AUTH-2].
+
+\noindent\textbf{Proprietà realizzate:} [AUTH-1], [AUTH-2].
+
+\clearpage
 \section{Il flusso del protocollo}
 \label{sec:flusso_protocollo}
 
@@ -146,12 +162,13 @@ Per garantire l'assenza di prove crittografiche riutilizzabili a fini di coerciz
 \subsubsection{Autenticazione presso il SA}
 \label{subsubsec:wp2_autenticazione_sa}
 
-Terminata la fase di generazione locale, l'applicazione client dell'elettore stabilisce un canale sicuro TLS verso il Sistema di Autenticazione (SA), validandone il certificato X.509 istituzionale. All'interno di questo tunnel cifrato, l'elettore si autentica utilizzando le proprie credenziali istituzionali.
+Terminata la fase di generazione locale, l'applicazione client dell'elettore stabilisce un canale sicuro TLS verso il Sistema di Autenticazione (SA), validandone il certificato X.509 istituzionale. All'interno di questo tunnel cifrato, l'elettore si autentica tramite il \textit{Single Sign-On} d'Ateneo con autenticazione a più fattori, secondo il meccanismo descritto nella Sezione~\ref{sec:autenticazione_elettori}.
 
-Il SA, avendo visibilità sull'identità reale dell'utente, esegue due controlli stringenti prima di procedere:
+Il SA, avendo visibilità sull'identità reale dell'utente, esegue i seguenti controlli prima di procedere:
 \begin{enumerate}
     \item Verifica l'appartenenza dell'utente all'elenco degli aventi diritto al voto per la specifica elezione in corso.
     \item Interroga il proprio registro interno (indicizzato per identità reale) per accertarsi che l'utente non abbia già richiesto e ottenuto un certificato pseudonimo per il medesimo $id_{elezione}$.
+    \item Verifica la \textit{proof-of-possession} della chiave effimera, validando con $PU_v$ la firma apposta dall'elettore su un \textit{nonce} di sfida, così da certificare unicamente chiavi di cui il richiedente detiene la corrispondente $PR_v$.
 \end{enumerate}
 
 \subsubsection{Certificato pseudonimo}
@@ -509,13 +526,13 @@ A conclusione della definizione architetturale, la seguente matrice di tracciabi
 
     \textbf{[AUTH-1]} \newline Verifica del diritto di voto
     & Pieno
-    & Il SA autentica l'utente con credenziali istituzionali e rilascia $C_p$ solo agli aventi diritto.
+    & Il SA autentica l'utente tramite SSO federato d'Ateneo con MFA e rilascia $C_p$ solo agli aventi diritto.
     & Registro degli aventi diritto corretto e SA affidabile nella fase di autenticazione. \\
     \hline
 
     \textbf{[AUTH-2]} \newline Inviolabilità delle Credenziali
     & Pieno
-    & $C_p$ è firmato dal SA con $PR_{SA}$ e verificato dall'AE con $PU_{SA}$. Un attaccante non può produrre un certificato valido senza falsificare la firma.
+    & $C_p$ è firmato dal SA con $PR_{SA}$ e verificato dall'AE con $PU_{SA}$. Un attaccante non può produrre un certificato valido senza falsificare la firma; la \textit{proof-of-possession} di $PR_v$ vincola $C_p$ a chi detiene la chiave effimera.
     & Sicurezza della firma digitale, protezione di $PR_{SA}$ e affidabilità della PKI d'Ateneo. \\
     \hline
 
@@ -623,7 +640,9 @@ La progettazione dell'architettura e del protocollo crittografico si fonda sull'
     \item \textbf{Hash chain (\textit{Tamper-evident log}):} impiegata per strutturare il registro pubblico gestito dall'AE. L'uso di \textit{hash pointer} che incatenano sequenzialmente i record trasforma l'urna in un log \textit{append-only} a prova di manomissione, soddisfacendo l'integrità globale [INT-3].
     \item \textbf{Merkle Tree:} albero di hash costruito parallelamente alla \textit{hash chain}. Permette di indicizzare i \textit{fingerprint} delle schede, fornendo prove di inclusione crittografiche che l'elettore può validare in tempo logaritmico, soddisfacendo il requisito di verifica individuale [VER-1].
     \item \textbf{PKI e certificati X.509:} l'infrastruttura a chiave pubblica preesistente è il pilastro su cui poggia l'autenticazione delle autorità. I certificati X.509 garantiscono la distribuzione sicura e l'autenticità delle chiavi pubbliche del SA ($PU_{SA}$) e dell'AE ($PU_{AE}$).
-    \item \textbf{TLS (\textit{Transport Layer Security}):} utilizzato per proteggere le comunicazioni Elettore--SA ed Elettore--AE con autenticazione del server tramite certificato X.509. L'autenticazione dell'elettore avviene invece a livello applicativo tramite credenziali istituzionali. I limiti di TLS rispetto alla \textit{traffic analysis} e le relative mitigazioni sono discussi nella parte iniziale dedicata al requisito TLS.
+    \item \textbf{TLS (\textit{Transport Layer Security}):} utilizzato per proteggere le comunicazioni Elettore--SA ed Elettore--AE con autenticazione del server tramite certificato X.509. L'autenticazione dell'elettore avviene invece a livello applicativo tramite il \textit{Single Sign-On} federato d'Ateneo. I limiti di TLS rispetto alla \textit{traffic analysis} e le relative mitigazioni sono discussi nella parte iniziale dedicata al requisito TLS.
+
+    \item \textbf{Federated identity (OpenID Connect) e autenticazione a più fattori:} l'autenticazione degli elettori si appoggia all'\textit{Identity Provider} d'Ateneo tramite OpenID Connect, con il SA in veste di \textit{Relying Party} e MFA preferibilmente FIDO2/WebAuthn. La prova di possesso della chiave effimera segue il paradigma \textit{challenge-response}. Il meccanismo è dettagliato nella Sezione~\ref{sec:autenticazione_elettori}.
 
     \item \textbf{Paradigma \textit{Encrypt-then-Sign}:} applicato dal client durante l'assemblaggio del pacchetto di voto nella Fase 2. Il voto viene prima cifrato in $C$, e solo successivamente l'insieme del crittogramma e dei metadati viene sigillato dalla firma effimera $\text{Sign}_{PR_v}$, garantendo l'integrità dei dati cifrati durante il transito in rete [INT-1].
 \end{itemize}
