@@ -373,6 +373,8 @@ Il protocollo garantisce quindi una segretezza non \textit{trustless} ma solida,
 \section{Meccanismi di verifica}
 \label{sec:meccanismi_verifica}
 
+I meccanismi descritti in questa sezione concretizzano il ruolo del \textbf{Verificatore Pubblico} definito nel WP1: un attore indipendente e passivo che opera esclusivamente sui dati pubblicati dall'AE. La figura si declina in due modalità complementari: l'\textbf{elettore}, che verifica l'inclusione della propria scheda [VER-1], e l'\textbf{osservatore esterno} (o comitato di controllo), che valida l'integrità dell'intera elezione [VER-2]. Distinto da questa figura è il \textbf{revisore istituzionale} (\textit{auditor}): un ruolo più potente che, a differenza del Verificatore Pubblico, può ottenere accesso temporaneo all'archivio privato dell'AE per controlli non eseguibili sui soli dati pubblici.
+
 \subsection{Verifica individuale \texttt{[VER-1]}}
 \label{subsec:wp2_verifica_individuale}
 
@@ -390,7 +392,7 @@ Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di p
 \subsection{Verifica universale \texttt{[VER-2]}}
 \label{subsec:wp2_verifica_universale}
 
-Qualsiasi osservatore esterno può validare l'integrità globale dell'elezione, nei limiti di confidenzialità dell'architettura. Scaricando l'urna pubblica e il $Doc_{finale}$, un Verificatore Universale controlla:
+Qualsiasi osservatore esterno può validare l'integrità globale dell'elezione, nei limiti di confidenzialità dell'architettura. Scaricando l'urna pubblica e il $Doc_{finale}$, il Verificatore Pubblico controlla:
 \begin{itemize}
     \item \textbf{Consistenza della Merkle Root:} ricalcola l'albero dai fingerprint $F_j$ pubblicati e verifica che coincida con la radice nel record di chiusura;
     \item \textbf{Integrità sequenziale:} valida a cascata tutti gli hash pointer, escludendo alterazioni, inserimenti o rimozioni nella hash chain;
@@ -398,7 +400,7 @@ Qualsiasi osservatore esterno può validare l'integrità globale dell'elezione, 
     \item \textbf{Coerenza numerica:} controlla l'equazione $k_{conformi} + k_{invalide} = k_{totale}$;
     \item \textbf{Autenticità del documento finale:} verifica la firma sul $Doc_{finale}$.
 \end{itemize}
-A integrazione, un revisore istituzionale a cui sia concesso l'accesso temporaneo all'archivio privato dell'AE può ricalcolare l'hash di ogni scheda cifrata e verificare l'uguaglianza $K_j = H(C_j)$ rispetto ai commitment pubblicati, rendendo rilevabile una sostituzione dei ciphertext prima della decifratura.
+A integrazione, e a differenza del Verificatore Pubblico che opera sui soli dati pubblici, un revisore istituzionale (\textit{auditor}) a cui sia concesso l'accesso temporaneo all'archivio privato dell'AE può ricalcolare l'hash di ogni scheda cifrata e verificare l'uguaglianza $K_j = H(C_j)$ rispetto ai commitment pubblicati, rendendo rilevabile una sostituzione dei ciphertext prima della decifratura.
 
 \subsection{Dichiarazione del vincolo strutturale \texttt{[VER-2]}}
 \label{subsec:wp2_limite_ver2}
@@ -504,7 +506,7 @@ La matrice seguente riepiloga come i requisiti di WP1 siano stati tradotti in me
 
     \textbf{[VER-2]} \newline Verificabilità Universale
     & Parziale \newline (strutturale)
-    & Il verificatore controlla hash chain, firme AE, Merkle Root, contatori finali e coerenza dei record. Un auditor può verificare $K_j = H(C_j)$.
+    & Il Verificatore Pubblico controlla hash chain, firme AE, Merkle Root e contatori finali. Un revisore istituzionale (\textit{auditor}) verifica $K_j = H(C_j)$ sull'archivio privato.
     & Lo scrutinio resta interno all'AE: non è verificabile matematicamente da chiunque. \\
     \hline
 
