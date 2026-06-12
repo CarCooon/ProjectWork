@@ -309,8 +309,8 @@ Se un attaccante — o la stessa Autorità Elettorale, in un'ipotesi di corruzio
 
 Per nascondere l'alterazione, l'attaccante sarebbe costretto a ricalcolare e rifirmare tutti i blocchi da $k$ fino a $j$. Tuttavia, l'applicazione della firma $\text{Sign}_{PR_{AE}}$ su ciascun blocco impedisce la contraffazione della catena a chiunque non possieda la chiave privata dell'AE. Di conseguenza, l'architettura supporta l'integrità globale [INT-3]: qualsiasi deviazione dalla sequenza originale diventa rilevabile da un revisore terzo o da un elettore che disponga della chiave pubblica $PU_{AE}$.
 
-\subsection{Ruolo del commitment pubblico \(K_j\)}
-\label{subsubsec:wp2_ruolo_kj}
+\subsection{Ruolo del commitment pubblico \texorpdfstring{\(K_j\)}{Kj}}
+\label{subsec:wp2_ruolo_kj}
 
 All'interno del record pubblicato, il valore $K_j = H(C_j)$ svolge la funzione di \textit{commitment} crittografico. Sfruttando l'unidirezionalità della funzione di hash, questo parametro garantisce la proprietà di \textit{hiding}: esso non rivela il ciphertext $C_j$ né, di conseguenza, la preferenza di voto, limitando le informazioni esposte sull'urna pubblica.
 
