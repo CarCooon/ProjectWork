@@ -64,7 +64,7 @@ Queste scelte spezzano la correlazione temporale delle operazioni, ridimensionan
 
 Il protocollo realizza l'autenticazione degli elettori secondo il modello di \textit{federated identity}, scelta naturale nel contesto d'Ateneo, che dispone già di un \textit{Identity Provider} (IdP) istituzionale e di un servizio di \textit{Single Sign-On} (SSO) per le proprie utenze.
 
-\paragraph{Identity proofing ereditato.} Coerentemente con il modello NIST SP~800-63 si distingue l'\textit{identity proofing} (accertamento iniziale dell'identità) dall'\textit{authentication} (prova di controllo dell'autenticatore). Il proofing è ereditato dall'Ateneo, che lo effettua all'immatricolazione: il SA non lo ripete e si limita ad autenticare l'elettore e a verificarne l'eleggibilità.
+\paragraph{Identity proofing ereditato.} Coerentemente con il modello NIST SP~800-63 si distingue l'\textit{identity proofing} (accertamento iniziale dell'identità) dall'\textit{authentication} (prova di controllo dell'autenticatore). Il proofing è ereditato dall'Ateneo, che lo effettua all'immatricolazione: il SA non lo ripete e si limita ad autenticare l'elettore e a verificarne l'eleggibilità. In questi termini la \textit{registrazione} all'elezione non consiste nel ricreare un'identità già accertata, ma nell'iscrivere l'avente diritto alla singola consultazione: atto che si concretizza nell'emissione del certificato pseudonimo $C_p$ (Sezione~\ref{subsec:wp2_fase_autenticazione}), con cui il SA vincola la chiave effimera $PU_v$ al diritto di voto verificato.
 
 \paragraph{Autenticazione federata e ruolo del SA.} L'elettore si autentica tramite l'SSO d'Ateneo basato su OpenID Connect (OIDC), il livello di identità costruito sopra OAuth~2.0. Rispetto a tale flusso il SA agisce da \textit{Relying Party}: delega la verifica delle credenziali all'IdP istituzionale e ne riceve un \textit{ID~Token} firmato che attesta identità ed eleggibilità dell'utente. Il SA non gestisce quindi le password e non è esso stesso l'IdP, ma è l'autorità di pseudonimizzazione che, a valle dell'autenticazione, emette il certificato $C_p$. In questa prospettiva $C_p$ è assimilabile a un \textit{capability token}: l'elettore si autentica \textit{per identità} verso il SA, ma verso l'AE si presenta \textit{per autorizzazione}, esibendo $C_p$ senza mai rivelare l'anagrafica.
 
@@ -329,6 +329,8 @@ Una blockchain resterebbe una direzione valida solo in scenari puramente \textit
 \label{subsec:wp2_chiusura}
 
 Allo scoccare di $t_{chiusura}$ il sistema interrompe l'accettazione di nuovi pacchetti: ogni sottomissione successiva viene respinta. L'AE pubblica quindi un record di chiusura in coda alla hash chain, contenente il numero totale di schede ricevute ($k_{totale}$) e la Merkle Root finale. La firma $\text{Sign}_{PR_{AE}}$ su questo record consolida lo stato dell'urna e rende rilevabile ogni inserimento successivo.
+
+Si osservi che il protocollo non contempla la sostituzione né l'annullamento di un voto già sottomesso, neppure prima della chiusura: tale scelta (modello \textit{one-shot}) e le relative garanzie crittografiche sono trattate nella Sezione~\ref{subsec:wp2_one_shot_irrevocabile}.
 
 \subsection{Decifratura e validazione delle schede}
 \label{subsec:wp2_decifratura_validazione}
