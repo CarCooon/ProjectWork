@@ -131,7 +131,7 @@ L'Autorità Elettorale (AE) genera localmente due coppie di chiavi RSA distinte 
     \item $(PU_{ele}, PR_{ele})$: coppia dedicata esclusivamente alla cifratura delle schede da parte degli elettori e alla successiva decifratura da parte dell'AE.
     \item $(PU_{AE}, PR_{AE})$: coppia dedicata esclusivamente all'apposizione delle firme digitali sui record dell'urna, sulle ricevute e sul documento di scrutinio finale.
 \end{itemize}
-L'isolamento di questi due domini operativi risponde rigorosamente al principio del minimo privilegio (\textit{least privilege}). In questo modo, l'eventuale compromissione della chiave di firma $PR_{AE}$ non implica in alcun modo la compromissione di $PR_{ele}$. Quest'ultima rimane in possesso esclusivo dell'AE, assicurando che la segretezza dei voti resti protetta per l'intera durata della votazione.
+L'isolamento di questi due domini operativi risponde rigorosamente al principio del minimo privilegio (\textit{least privilege}). In questo modo, l'eventuale compromissione della chiave di firma $PR_{AE}$ non implica in alcun modo la compromissione di $PR_{ele}$. Quest'ultima rimane in possesso esclusivo dell'AE ed è custodita \textit{offline}, su un modulo hardware sicuro o un supporto isolato dalla rete; viene resa disponibile alla macchina di scrutinio soltanto a partire dalla chiusura delle urne ($t_{chiusura}$). Durante l'intera fase di raccolta, dunque, la chiave di decifratura non è presente sul server che riceve le schede.
 
 Parallelamente, il Sistema di Autenticazione (SA) genera la propria coppia di chiavi RSA $(PU_{SA}, PR_{SA})$, la cui chiave privata verrà impiegata unicamente per firmare digitalmente i certificati pseudonimi rilasciati agli elettori abilitati.
 
@@ -222,7 +222,7 @@ $$M = (C, C_p, \eta, id_{elezione}, \sigma)$$
 
 L'operazione $\text{Sign}$ segue la convenzione \textit{hash-and-sign} definita nella legenda dei parametri e della notazione.
 
-È cruciale sottolineare che la firma $\sigma$ copre l'hash del ciphertext $C$, e non il voto in chiaro $i$. Questo meccanismo rileva qualsiasi tentativo di manipolazione in transito: un attaccante \textit{Man-in-the-Middle} che provasse a sostituire $C$ con una propria scheda cifrata invaliderebbe matematicamente $\sigma$. 
+È cruciale sottolineare che la firma $\sigma$ copre l'hash del ciphertext $C$, e non il voto in chiaro $i$. La firma include inoltre $C_p$ e $id_{elezione}$, legando il pacchetto all'abilitazione che lo accompagna e alla specifica consultazione in corso. Questo meccanismo rileva qualsiasi tentativo di manipolazione in transito: un attaccante \textit{Man-in-the-Middle} che provasse a sostituire $C$ con una propria scheda cifrata invaliderebbe matematicamente $\sigma$.
 
 Infine, si ribadisce che $\eta$, $C_p$ e la firma sono presenti in chiaro all'interno della struttura logica del pacchetto $M$, affinché l'AE possa estrarli ed eseguire i controlli previsti. In particolare, $\eta$ è necessario per il controllo anti-replay e per il calcolo del fingerprint $F_j = H(K_j \parallel \eta_j)$. La confidenzialità di questi campi rispetto a osservatori esterni è garantita dal tunnel TLS sottostante.
 
@@ -282,9 +282,9 @@ Stato di elaborazione della scheda. & Hash pointer al record precedente e firma 
 \subsubsection{Cancellazione della chiave effimera}
 \label{subsubsec:wp2_cancellazione_prv}
 
-Non appena il client dell'elettore riceve e verifica la correttezza matematica della ricevuta $R$, l'applicazione procede alla cancellazione istantanea e irrecuperabile della chiave privata $PR_v$ dal dispositivo locale.
+Non appena il client dell'elettore riceve e verifica la correttezza matematica della ricevuta $R$, l'applicazione cancella in modo istantaneo e irrecuperabile due elementi dal dispositivo locale: la chiave privata effimera $PR_v$ e il fattore di randomizzazione $r$ impiegato nella cifratura RSA-OAEP.
 
-Questo passaggio non è una semplice routine di pulizia della memoria, ma una misura primaria per la mitigazione della \textbf{coercizione retroattiva}. Distruggendo la chiave utilizzata per firmare il pacchetto, l'elettore si priva intenzionalmente della capacità crittografica di provare la paternità della firma $\sigma$. Qualora un coercitore richiedesse in un secondo momento di dimostrare l'associazione tra la propria identità e un record nell'urna, l'elettore non potrebbe fornire una prova crittografica diretta basata sulla chiave effimera ormai cancellata. 
+Questo passaggio non è una semplice routine di pulizia della memoria, ma una misura primaria per la mitigazione della \textbf{coercizione retroattiva}, e i due elementi cancellati coprono aspetti distinti. Distruggendo $PR_v$, l'elettore si priva della capacità di provare la paternità della firma $\sigma$, cioè di dimostrare di aver inviato un determinato pacchetto. Distruggendo $r$, si priva della capacità di provare il contenuto della scheda: chi conservasse $r$, conoscendo la propria preferenza, potrebbe infatti ricalcolare il ciphertext e mostrarne la corrispondenza con un record dell'urna. Cancellando entrambi, l'elettore non è più in grado di costruire una prova del proprio voto esibibile a un coercitore.
 
 Ai fini della verifica individuale VER-1, l'elettore conserva localmente soltanto il ciphertext $C$, il nonce $\eta$, la ricevuta $R$ e l'indice progressivo $j$ (deducibile da $R$). Il commitment $K_j$ non necessita di essere salvato, in quanto l'elettore può ricalcolarlo autonomamente applicando l'hash a $C$, oppure può semplicemente recuperarlo dal record pubblico dell'urna.
 
@@ -350,6 +350,8 @@ Le schede accettate vengono quindi aggregate in blocchi di pubblicazione. L'indi
 Parallelamente alla \textit{hash chain}, l'architettura dell'urna prevede la costruzione di un albero di hash (Merkle Tree). Mentre la catena storicizza l'intero pacchetto informativo, i nodi foglia di questa struttura ad albero sono costituiti esclusivamente dai \textit{fingerprint} univoci ($F_j$) delle schede accettate. 
 
 Questo indice viene aggiornato dinamicamente dall'Autorità Elettorale in concomitanza con il rilascio dei blocchi aggregati. Al termine di ogni finestra temporale di pubblicazione, l'AE calcola la nuova radice dell'albero (\textit{Merkle Root}), la firma digitalmente e la espone pubblicamente. Alla chiusura ufficiale delle operazioni di voto ($t_{chiusura}$), viene generata e pubblicata la \textit{Merkle Root} definitiva, che impegna crittograficamente l'insieme dei voti validamente registrati.
+
+Ogni \textit{Merkle Root} pubblicata, sia intermedia sia definitiva, viene inoltre controfirmata dal Sistema di Autenticazione, che ne conserva una copia con il proprio timestamp. Il SA appone la firma esclusivamente sul valore della radice, ossia su un hash, e non ha pertanto accesso al contenuto delle schede né ai voti in chiaro.
 
 L'implementazione del Merkle Tree è dettata dalla necessità di ottimizzare le prestazioni, separando radicalmente l'onere computazionale in base al soggetto che effettua la verifica:
 
@@ -568,7 +570,7 @@ A conclusione della definizione architetturale, la seguente matrice di tracciabi
 
     \textbf{[SEC-1]} \newline Segretezza della Scheda
     & Parziale
-    & Il voto è cifrato con RSA-OAEP e trasmesso su TLS. L'urna pubblica espone solo $K_j = H(C_j)$ e $F_j = H(K_j \parallel \eta_j)$.
+    & Il voto è cifrato con RSA-OAEP e trasmesso su TLS. L'urna pubblica espone solo $K_j = H(C_j)$ e $F_j = H(K_j \parallel \eta_j)$. La chiave $PR_{ele}$ è custodita offline e attivata solo a $t_{chiusura}$.
     & L'AE deve comunque decifrare le singole schede durante lo scrutinio. \\
     \hline
 
@@ -580,7 +582,7 @@ A conclusione della definizione architetturale, la seguente matrice di tracciabi
 
     \textbf{[SEC-3]} \newline Assenza di Ricevuta
     & Parziale
-    & $R$ attesta la registrazione della scheda cifrata, ma non rivela la preferenza. La cancellazione di $PR_v$ riduce le prove crittografiche esportabili.
+    & $R$ attesta la registrazione della scheda cifrata, ma non rivela la preferenza. La cancellazione di $PR_v$ e del fattore $r$ riduce le prove crittografiche esportabili.
     & Non impedisce prove esterne, come screenshot, registrazioni o controllo diretto del dispositivo. \\
     \hline
 
