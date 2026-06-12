@@ -13,7 +13,7 @@ Restano inoltre due limiti strutturali che il protocollo non può eliminare usan
 \section{Requisito TLS e limiti rispetto alla traffic analysis}
 \label{sec:wp2_tls}
 
-Tutte le comunicazioni di rete tra l'Elettore e le componenti server (Sistema di Autenticazione e Autorità Elettorale) devono avvenire esclusivamente su canali cifrati tramite protocollo TLS (Transport Layer Security). In questa fase, l'autenticazione dei server è garantita dall'utilizzo di certificati digitali X.509 emessi dalla Certificate Authority (CA) d'Ateneo.
+Tutte le comunicazioni di rete tra l'Elettore e le componenti server (Sistema di Autenticazione e Autorità Elettorale) devono avvenire esclusivamente su canali cifrati tramite protocollo TLS (Transport Layer Security). In questa fase, l'autenticazione dei server è garantita dall'utilizzo di certificati digitali X.509, appoggiandosi all'Infrastruttura a Chiave Pubblica (PKI) d'Ateneo preesistente.
 
 L'impiego di TLS non rappresenta un semplice dettaglio implementativo, ma un requisito strutturale indispensabile. Come verrà dettagliato in seguito, il protocollo applicativo prevede che l'elettore firmi il pacchetto di voto $M$ per garantirne l'integrità. Tuttavia, tale firma non offre alcuna garanzia di confidenzialità. Senza la cifratura del canale di trasporto, i metadati essenziali contenuti nel pacchetto — tra cui il certificato pseudonimo $C_p$, il nonce $\eta$ e la firma $\sigma$ — viaggerebbero in chiaro. 
 
@@ -122,7 +122,7 @@ Parallelamente, il Sistema di Autenticazione (SA) genera la propria coppia di ch
 \subsubsection{Distribuzione delle chiavi pubbliche tramite PKI}
 \label{subsubsec:wp2_pki}
 
-Al fine di garantire l'autenticità del materiale crittografico, il protocollo si appoggia all'Infrastruttura a Chiave Pubblica (PKI) istituzionale. Le tre chiavi pubbliche $PU_{ele}$, $PU_{AE}$ e $PU_{SA}$ vengono certificate dalla Certificate Authority (CA) dell'Ateneo tramite certificati digitali in formato X.509. Tali certificati vengono pubblicati nel \textit{repository} istituzionale e resi disponibili a tutti gli attori prima dell'inizio delle operazioni di voto.
+Al fine di garantire l'autenticità di tutto il materiale crittografico, le chiavi pubbliche $PU_{ele}$, $PU_{AE}$ e $PU_{SA}$ vengono autenticate a monte tramite certificati digitali in formato X.509. Tali certificati, integrati nella medesima PKI, vengono pubblicati nel \textit{repository} istituzionale e resi disponibili a tutti gli attori prima dell'inizio delle operazioni di voto.
 
 Questa infrastruttura PKI svolge un duplice ruolo operativo: oltre a distribuire le chiavi crittografiche applicative, i medesimi certificati X.509 vengono impiegati per l'autenticazione dei server (SA e AE) durante la fase di instaurazione dei canali sicuri TLS. Ciò impedisce nativamente che un avversario di rete possa impersonare i server legittimi.
 
@@ -146,7 +146,7 @@ Per garantire l'assenza di prove crittografiche riutilizzabili a fini di coerciz
 \subsubsection{Autenticazione presso il SA}
 \label{subsubsec:wp2_autenticazione_sa}
 
-Terminata la fase di generazione locale, l'applicazione client dell'elettore stabilisce un canale sicuro TLS verso il Sistema di Autenticazione (SA), validandone il certificato X.509 emesso dalla CA d'Ateneo. All'interno di questo tunnel cifrato, l'elettore si autentica utilizzando le proprie credenziali istituzionali.
+Terminata la fase di generazione locale, l'applicazione client dell'elettore stabilisce un canale sicuro TLS verso il Sistema di Autenticazione (SA), validandone il certificato X.509 istituzionale. All'interno di questo tunnel cifrato, l'elettore si autentica utilizzando le proprie credenziali istituzionali.
 
 Il SA, avendo visibilità sull'identità reale dell'utente, esegue due controlli stringenti prima di procedere:
 \begin{enumerate}
@@ -309,8 +309,8 @@ Se un attaccante — o la stessa Autorità Elettorale, in un'ipotesi di corruzio
 
 Per nascondere l'alterazione, l'attaccante sarebbe costretto a ricalcolare e rifirmare tutti i blocchi da $k$ fino a $j$. Tuttavia, l'applicazione della firma $\text{Sign}_{PR_{AE}}$ su ciascun blocco impedisce la contraffazione della catena a chiunque non possieda la chiave privata dell'AE. Di conseguenza, l'architettura supporta l'integrità globale [INT-3]: qualsiasi deviazione dalla sequenza originale diventa rilevabile da un revisore terzo o da un elettore che disponga della chiave pubblica $PU_{AE}$.
 
-\subsection{Ruolo del commitment pubblico \texorpdfstring{\(K_j\)}{Kj}}
-\label{subsec:wp2_ruolo_kj}
+\subsubsection{Ruolo del commitment pubblico \texorpdfstring{$K_j$}{K\_j}}
+\label{subsubsec:wp2_ruolo_kj}
 
 All'interno del record pubblicato, il valore $K_j = H(C_j)$ svolge la funzione di \textit{commitment} crittografico. Sfruttando l'unidirezionalità della funzione di hash, questo parametro garantisce la proprietà di \textit{hiding}: esso non rivela il ciphertext $C_j$ né, di conseguenza, la preferenza di voto, limitando le informazioni esposte sull'urna pubblica.
 
