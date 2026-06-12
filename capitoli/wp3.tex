@@ -93,7 +93,7 @@ Qualora l'elettore provi a inviare nuovamente lo stesso identico pacchetto, l'at
 \begin{itemize}
     \item La ricevuta ufficiale $R$ rilasciata dall'AE e firmata con $PR_{AE}$ copre unicamente i parametri offuscati della transazione: $R = \text{Sign}_{PR_{AE}}(H(K_j \parallel F_j \parallel j \parallel id_{elezione}))$. Essa attesta l'avvenuta inclusione della scheda cifrata, ma non espone né il voto in chiaro $i$, né il fattore di randomizzazione $r$ di RSA-OAEP. Di conseguenza, $R$ costituisce una ricevuta non rivelante.
     \item Al fine di mitigare la coercizione retroattiva, l'applicazione client esegue la cancellazione immediata e irrecuperabile della chiave privata effimera $PR_v$ non appena validata la ricevuta. Privandosi di tale materiale crittografico, l'elettore perde la capacità di dimostrare a posteriori di essere l'autore della firma $\sigma$ posta sul pacchetto inviato nell'urna.
-\end{itemize
+\end{itemize}
 Queste contromisure realizzano la proprietà di Assenza di Ricevuta \textbf{[SEC-3]} a livello di protocollo applicativo, escludendo la possibilità che l'infrastruttura stessa fornisca strumenti validi per il commercio dei suffragi.
 
 \subsection{Coercitore}
@@ -107,7 +107,7 @@ L'analisi del protocollo mostra come la minaccia sia mitigata efficacemente sul 
 
 \paragraph{Limite strutturale alla coercizione ambientale istantanea:} In modalità attiva, il Coercitore si posiziona fisicamente accanto all'elettore durante l'atto del voto, imponendogli una scelta specifica sotto minaccia diretta. Avendo stabilito in WP2 un modello di voto \textit{one-shot} rigidamente irrevocabile e non modificabile, l'elettore non ha la possibilità di sovrascrivere o annullare la scheda in un secondo momento. Di conseguenza, se la coercizione avviene in tempo reale, l'attacco sul piano fisico va a buon fine.
 
-Per trasparenza progettuale, questo rischio residuo viene accettato ed è giustificato dal contesto operativo. Nello scenario universitario di riferimento, la minaccia di un'estorsione organizzata e sistematica del voto è considerata un rischio contenuto rispetto alle elezioni politiche nazionali. Introdurre meccanismi di revocabilità per contrastare questo attacco avrebbe comportato l'uso di identificativi偏 persistent, compromettendo lo pseudo-anonimato \textbf{[SEC-2]} e violando il vincolo di efficienza complessiva del sistema. Il protocollo adotta quindi un compromesso che privilegia la robustezza crittografica e la linearità del flusso.
+Per trasparenza progettuale, questo rischio residuo viene accettato ed è giustificato dal contesto operativo. Nello scenario universitario di riferimento, la minaccia di un'estorsione organizzata e sistematica del voto è considerata un rischio contenuto rispetto alle elezioni politiche nazionali. Introdurre meccanismi di revocabilità per contrastare questo attacco avrebbe comportato l'uso di identificativi persistenti, compromettendo lo pseudo-anonimato \textbf{[SEC-2]} e violando il vincolo di efficienza complessiva del sistema. Il protocollo adotta quindi un compromesso che privilegia la robustezza crittografica e la linearità del flusso.
 
 \subsection{Sistema di Autenticazione Disonesto}
 \label{subsec:3.2.6_sa_disonesto}
