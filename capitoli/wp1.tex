@@ -363,7 +363,7 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 
 \subsection*{3. Falsario}
 \textbf{Tipologia:} Attivo. \\
-\textbf{Descrizione:} Questo avversario si concentra sulla manipolazione dei meccanismi di validazione. Il suo obiettivo è ingannare il sistema sottomettendo schede elettorali volutamente malformate oppure falsificando le firme digitali per forzare l'accettazione di voti illegittimi all'interno dell'urna, eludendo di fatto i controlli di integrità. \\
+\textbf{Descrizione:} Questo avversario si concentra sulla manipolazione dei meccanismi di autenticazione. Il suo obiettivo è ingannare il sistema falsificando le firme digitali per tentare di ottenere l'accettazione di voti illegittimi all'interno dell'urna, eludendo i controlli di credenziale. Senza un certificato pseudonimo valido rilasciato dal SA, nessuna sua sottomissione viene accettata dal sistema. \\
 \textbf{Risorse:} Dispone di notevoli capacità di calcolo e di una conoscenza profonda degli algoritmi del sistema. Interagisce con il protocollo dall'esterno con lo scopo di aggirare i controlli di sicurezza del sistema, ma non ha alcun accesso amministrativo ai server.
 
 \subsection*{4. Elettore Disonesto (o Impostore)}
@@ -425,7 +425,7 @@ L'integrità garantisce che i dati non subiscano alterazioni o corruzioni non au
 
 \begin{itemize}
     \item \textbf{[INT-1] Integrità in Transito:} Garantisce che nessun Avversario di Rete (Man-in-the-Middle) possa intercettare e alterare le schede in transito tra il dispositivo dell'elettore e il server. Qualsiasi tentativo di manipolazione modificherà la struttura crittografica del pacchetto, che verrà quindi respinto.
-    \item \textbf{[INT-2] Conformità della Scheda:} Essendo l'elezione strutturata a lista chiusa, questa proprietà garantisce che l'urna accetti esclusivamente schede ben formate. È la nostra difesa mirata contro il Falsario Crittografico: il sistema deve essere in grado di scartare matematicamente qualsiasi scheda truccata (come voti con pesi alterati o preferenze multiple nascoste) prima ancora che venga inserita nell'urna, evitando che il conteggio finale venga corrotto.
+    \item \textbf{[INT-2] Conformità della Scheda:} Essendo l'elezione strutturata a lista chiusa, questa proprietà garantisce che l'urna accetti esclusivamente schede ben formate. È la difesa mirata contro l'Elettore Disonesto che, detenendo credenziali valide, potrebbe tentare di sottomettere una scheda truccata: il sistema deve essere in grado di scartare matematicamente qualsiasi preferenza malformata (come voti con pesi alterati o preferenze multiple nascoste), evitando che il conteggio finale venga corrotto.
     \item \textbf{[INT-3] Immutabilità dell'Urna:} Garantisce che, una volta registrata con successo sull'urna pubblica, nessuna scheda possa essere modificata, sostituita o cancellata prima dello scrutinio. Questa proprietà si appoggia sull'Assunzione di Fiducia relativa all'onestà dell'Autorità Elettorale. Se l'AE si comporta in modo disonesto, potrebbe tentare di alterare il risultato finale eliminando o modificando le schede memorizzate, ma il sistema non può impedire fisicamente questa azione. Tuttavia, se l'AE cancella una scheda, l'elettore che ha inviato quella scheda non la troverà più nell'urna pubblica, scoprendo così la manomissione. In questo senso, l'immutabilità dell'urna è una proprietà che protegge l'integrità del conteggio, ma non può garantire la protezione contro un attacco interno da parte dell'AE.
 \end{itemize}
 
@@ -485,8 +485,8 @@ Questa categoria rappresenta il fondamento della trasparenza del sistema. Poich�
     \hline
     Avversario di Rete & & & & $\bullet$ & $\bullet$ & $\triangle$ & & $\bullet$ & & & & \\
     Attaccante DoS     & & & & & & & & & & & & \\
-    Falsario           & & $\bullet$ & & & & & & & $\bullet$ & & & \\
-    Elettore Disonesto & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & & & $\bullet$ & & & & & \\
+    Falsario           & & $\bullet$ & & & & & & & & & & \\
+    Elettore Disonesto & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & & & $\bullet$ & & $\bullet$ & & & \\
     Coercitore         & & & & & & & $\triangle$ & & & & & \\
     SA Disonesto       & & & & & & $\bullet$ & & & & & & \\
     AE Disonesta       & & & & & $\bullet$ & & & & & $\triangle$ & $\bullet$ & $\bullet$ \\
