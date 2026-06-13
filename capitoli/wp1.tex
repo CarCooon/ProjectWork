@@ -28,8 +28,8 @@ Il compromesso fondamentale adottato in questa scelta progettuale risiede quindi
 \clearpage
 
 
-\section{Funzionalità del sistema}
-\label{sec:1.2_funzionalità_sistema}
+\section{Funzionamento del sistema}
+\label{sec:1.2_funzionamento_sistema}
 
 La funzionalità primaria del protocollo consiste nella gestione di un'elezione elettronica sicura all'interno di un ambiente remoto e non fisicamente controllato, garantendo che l'intero processo sia trasparente, verificabile e protetto da manipolazioni sistemiche. Al fine di delineare in modo dettagliato e non ambiguo il perimetro logico del sistema, il funzionamento del protocollo viene modellato attraverso un flusso sequenziale suddiviso in tre macro-fasi funzionali e cronologiche, propedeutiche l'una all'altra:
 
@@ -38,6 +38,104 @@ La funzionalità primaria del protocollo consiste nella gestione di un'elezione 
     \item \textbf{Fase di Votazione ed Espressione del Suffragio:} Una volta ottenuta l'abilitazione, l'elettore predispone la propria scheda selezionando una singola preferenza all'interno del dominio ristretto della lista chiusa. Il sistema garantisce la sottomissione sicura della scheda in modalità confidenziale, inserendola all'interno di un registro delle transazioni elettorali. Come output di questa fase, il sistema genera e restituisce una ricevuta logica (es. un codice di tracciamento della scheda cifrata) dell'avvenuta corretta sottomissione, che fungerà da elemento di controllo per la successiva fase di verifica.
     \item \textbf{Fase di Scrutinio e Pubblicazione:} Al raggiungimento del termine temporale stabilito, il sistema impedisce in modo definitivo la ricezione di qualunque ulteriore scheda, dichiarando chiusa la raccolta. Viene quindi avviata la procedura di calcolo aggregato delle preferenze registrate nel sistema. La funzionalità richiesta impone che l'aggregazione dei risultati avvenga in modo matematicamente separato rispetto alle singole schede, terminando con la pubblicazione del conteggio finale dei voti e delle relative prove di correttezza necessarie alla validazione indipendente da parte di osservatori esterni.
 \end{enumerate}
+
+\begin{figure}[H]
+    \centering
+
+    \begin{tikzpicture}[
+        font=\small,
+        phase/.style={
+            rectangle,
+            rounded corners=7pt,
+            draw=black!75,
+            line width=1pt,
+            fill=gray!8,
+            text width=8.4cm,
+            align=center,
+            minimum height=1.25cm,
+            inner sep=8pt
+        },
+        storage/.style={
+            rectangle,
+            draw=black!75,
+            line width=1pt,
+            fill=gray!20,
+            text width=5.3cm,
+            align=center,
+            minimum height=1cm,
+            inner sep=6pt
+        },
+        arr/.style={
+            -{Stealth[length=7pt, width=5pt]},
+            line width=1pt,
+            black!75
+        },
+        lbl/.style={
+            font=\footnotesize,
+            inner sep=3pt,
+            fill=white,
+            text=black!70
+        },
+        side/.style={
+            font=\footnotesize\itshape,
+            text=black!55,
+            anchor=west
+        }
+    ]
+
+        \node[phase] (f1) {
+            \textbf{Fase 1 --- Registrazione e Autenticazione}\\[-1pt]
+            \footnotesize Verifica identità, eleggibilità e unicità dell'abilitazione
+        };
+
+        \node[phase, below=1.25cm of f1] (f2) {
+            \textbf{Fase 2 --- Espressione e Sottomissione del Voto}\\[-1pt]
+            \footnotesize Preparazione della scheda e invio all'autorità elettorale
+        };
+
+        \node[phase, below=1.25cm of f2] (f3) {
+            \textbf{Fase 3 --- Scrutinio e Pubblicazione}\\[-1pt]
+            \footnotesize Calcolo aggregato, pubblicazione dei risultati e dati di verifica
+        };
+
+        \node[storage, below=1.2cm of f3] (bp) {
+            \textbf{Bacheca Pubblica}\\[-1pt]
+            \footnotesize risultati e prove verificabili
+        };
+
+        \draw[arr]
+            (f1.south) --
+            node[lbl, right] {abilitazione pseudonima}
+            (f2.north);
+
+        \draw[arr]
+            (f2.south) --
+            node[lbl, right] {ricevuta di sottomissione}
+            (f3.north);
+
+        \draw[arr]
+            (f3.south) --
+            node[lbl, right] {risultati aggregati}
+            (bp.north);
+
+        \node[side] at ($(f1.east)+(0.55,0)$) {SA $\leftrightarrow$ Elettore};
+        \node[side] at ($(f2.east)+(0.55,0)$) {Elettore $\rightarrow$ AE};
+        \node[side] at ($(f3.east)+(0.55,0)$) {AE $\rightarrow$ Verificatore};
+
+        \coordinate (timeTop) at ($(f1.north west)+(-0.75,0.15)$);
+        \coordinate (timeBot) at (timeTop |- bp.south);
+
+        \draw[-{Stealth[length=7pt, width=5pt]}, line width=1pt, gray!60]
+            (timeTop) --
+            ($(timeBot)+(0,-0.15)$)
+            node[below, font=\footnotesize, gray!60] {tempo};
+
+    \end{tikzpicture}
+
+    \caption{Sequenza logica delle macro-fasi del sistema di voto: ogni fase produce l'informazione necessaria per procedere alla fase successiva.}
+    \label{fig:fasi_protocollo}
+\end{figure}
+
 
 \subsection*{Vincoli operativi e Regole del voto}
 Il modello definisce due vincoli funzionali necessari per preservare la correttezza formale del processo:
@@ -59,7 +157,7 @@ Se da un lato la revocabilità offre una difesa teorica contro il voto di scambi
 \noindent
 Sulla base di questa onesta analisi critica dei limiti strutturali, si stabilisce come scelta progettuale definitiva che \textbf{il voto espresso sia rigidamente non revocabile e non modificabile (modello "one-shot")}. Una volta che la scheda viene trasmessa e registrata, essa è considerata definitiva e immutabile. Si evidenzia come tale semplificazione rappresenti un compromesso ingegneristico pienamente giustificato per lo scenario universitario di riferimento: a differenza delle elezioni politiche nazionali, dove l'alto rischio di voto di scambio e coercizione sistemica rende la revocabilità un requisito irrinunciabile, in ambito accademico la minaccia di estorsione organizzata del voto rappresenta un rischio decisamente più contenuto. Di conseguenza, si ritiene corretto privilegiare la linearità del protocollo, la robustezza dello pseudo-anonimato e la massima efficienza computazionale globale del sistema. Il rischio residuo legato alla coercizione estemporanea viene accettato e parzialmente mitigato attraverso la rigidità del formato a lista chiusa descritto in precedenza.
 
-
+\clearpage
 \section{Attori Onesti del Sistema}
 \label{sec:1.3_attori_onesti}
 
@@ -73,6 +171,146 @@ L'\textbf{Autorità Elettorale (AE)} è l'entità il cui compito è quello di ri
 
 Il \textbf{Verificatore Pubblico} è un attore indipendente e passivo, che può essere un osservatore esterno, un comitato di controllo o l'elettore stesso. Il suo unico scopo è verificare che le operazioni di voto e di scrutinio si svolgano in modo corretto. Questa entità non partecipa alla creazione dei voti e non si occupa di raccoglierli, ma interviene esaminando le prove e i dati pubblici messi a disposizione dall'Autorità Elettorale. La presenza del Verificatore Pubblico è indispensabile per realizzare la verificabilità universale, dando a chiunque la possibilità di accertarsi, in totale autonomia, che il risultato finale pubblicato sia l'esatto calcolo delle schede memorizzate nell'urna. L'inserimento di questa figura nel modello è fondamentale per garantire la trasparenza del processo elettorale e per rafforzare la fiducia degli elettori nei confronti del sistema di voto elettronico adottato.
 
+\begin{figure}[H]
+    \centering
+
+    \begin{tikzpicture}[
+        font=\small,
+        actor/.style={
+            rectangle,
+            rounded corners=6pt,
+            draw=black!75,
+            line width=1pt,
+            fill=gray!8,
+            text width=3.15cm,
+            align=center,
+            minimum height=1.25cm,
+            inner sep=6pt
+        },
+        storage/.style={
+            rectangle,
+            draw=black!75,
+            line width=1pt,
+            fill=gray!20,
+            text width=3.25cm,
+            align=center,
+            minimum height=1.15cm,
+            inner sep=6pt
+        },
+        trustarea/.style={
+            draw=black!30,
+            dashed,
+            rounded corners=8pt,
+            inner xsep=12pt,
+            inner ysep=12pt
+        },
+        arr/.style={
+            -{Stealth[length=6pt, width=4pt]},
+            line width=1pt,
+            black!75
+        },
+        lbl/.style={
+            font=\footnotesize,
+            inner sep=2.5pt,
+            fill=white,
+            text=black!70
+        }
+    ]
+
+        \node[actor] (elettore) at (0,0) {
+            \textbf{Elettore}\\[-1pt]
+            \footnotesize seleziona e invia la scheda
+        };
+
+        \node[actor, left=3.35cm of elettore] (sa) {
+            \textbf{SA}\\[-1pt]
+            \footnotesize Sistema di Autenticazione
+        };
+
+        \node[actor, right=3.35cm of elettore] (ae) {
+            \textbf{AE}\\[-1pt]
+            \footnotesize Autorità Elettorale
+        };
+
+        \node[storage, below=1.7cm of ae] (urna) {
+            \textbf{Urna / Bacheca}\\[-1pt]
+            \footnotesize record pubblici
+        };
+
+        \node[actor, below=1.7cm of elettore] (vp) {
+            \textbf{Verificatore}\\[-1pt]
+            \footnotesize controlla dati e prove
+        };
+
+        \begin{scope}[on background layer]
+            \node[
+                trustarea,
+                fit=(sa),
+                label={[font=\footnotesize, text=black!55]above:Dominio identità}
+            ] {};
+
+            \node[
+                trustarea,
+                fit=(ae)(urna),
+                label={[font=\footnotesize, text=black!55]above:Dominio voto}
+            ] {};
+        \end{scope}
+
+        \draw[arr, bend left=18]
+            (elettore.north west) to
+            node[lbl, above] {richiesta di accesso}
+            (sa.north east);
+
+        \draw[arr, bend left=18]
+            (sa.south east) to
+            node[lbl, below] {abilitazione pseudonima}
+            (elettore.south west);
+
+        \draw[arr]
+            (elettore) --
+            node[lbl, above] {scheda protetta}
+            (ae);
+
+        \draw[arr]
+            (ae) --
+            node[lbl, right] {registrazione}
+            (urna);
+
+        \draw[arr]
+            (urna) --
+            node[lbl, below] {dati verificabili}
+            (vp);
+
+        \draw[dashed, black!45, line width=0.9pt]
+            (sa.north east)
+            .. controls ($(sa.north)+(2.4,0.8)$) and ($(ae.north)+(-2.4,0.8)$) ..
+            node[lbl, above] {$\times$ separazione SA/AE}
+            (ae.north west);
+
+        \node[
+            font=\footnotesize\itshape,
+            text=black!55,
+            below=4pt of sa
+        ] {
+            conosce chi è abilitato
+        };
+
+        \node[
+            font=\footnotesize\itshape,
+            text=black!55,
+            below=4pt of ae
+        ] {
+            gestisce le schede, non le identità reali
+        };
+
+    \end{tikzpicture}
+
+    \caption{Architettura logica degli attori e separazione dei flussi informativi: il SA gestisce l'identità e l'abilitazione, mentre l'AE gestisce la raccolta delle schede.}
+    \label{fig:architettura_attori}
+\end{figure}
+
+
+\clearpage
 \section{Assunzioni di Fiducia}
 \label{sec:1.4_assunzioni_fiducia}
 
@@ -103,7 +341,7 @@ La sicurezza di un sistema di voto elettronico non è mai assoluta, ma è intrin
 \textbf{Motivazione e compromessi:} Il sistema garantisce la segretezza e l'inviolabilità delle schede a condizione che la matematica alla base delle funzioni scelte sia solida. Questa è un'ipotesi inevitabile per qualsiasi software moderno: non si può progettare un protocollo digitale senza fidarsi degli strumenti che proteggono i dati. Il compromesso è che accettiamo un rischio teorico legato al futuro progresso tecnologico pur di poter implementare il sistema oggi. \\
 \textbf{Rischio Residuo:} Se un attaccante trovasse un modo per aggirare l'algoritmo crittografico, tutte le difese del sistema crollerebbero. Chi attacca potrebbe calcolare le chiavi segrete del server, riuscendo a leggere i voti individuali degli utenti e persino a modificare i risultati finali dello scrutinio senza lasciare alcuna traccia.
 
-
+\clearpage
 \section{Modello di Minaccia (Threat Model)}
 \label{sec:1.5_threat_model}
 
@@ -145,7 +383,7 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 \textbf{Descrizione:} Questo avversario sfrutta il suo ruolo centrale nella raccolta delle schede per falsare l'esito della consultazione. Quando agisce in modo passivo, cerca di scoprire le preferenze in anticipo per monitorare segretamente l'andamento delle votazioni. Quando opera in modo attivo, tenta di alterare il conteggio finale, scartando di proposito voti validi oppure inserendo preferenze arbitrarie all'interno dell'urna. \\
 \textbf{Risorse:} Rappresenta la minaccia interna con il controllo più ampio sui dati raccolti. Gestisce direttamente l'infrastruttura che ospita l'urna digitale e la bacheca pubblica accessibile a tutti. Ha in custodia i voti protetti e si occupa materialmente del calcolo dei risultati, ma non ha a disposizione le informazioni necessarie per collegare una specifica scheda alla persona reale che l'ha inviata.
 
-
+\clearpage
 \section{Proprietà di Sicurezza da Preservare}
 \label{sec:1.6_proprieta_sicurezza}
 
@@ -195,7 +433,7 @@ Questa categoria rappresenta il fondamento della trasparenza del sistema. Poich�
     \item \textbf{[VER-2] Verificabilità Universale:} Garantisce che il Verificatore Pubblico, o qualsiasi osservatore esterno, possa convalidare matematicamente l'esito delle elezioni partendo esclusivamente dai dati pubblicati a fine scrutinio. Si tratta di una contromisura definitiva per impedire all'Autorità Elettorale di manipolare il risultato finale all'insaputa degli elettori.
 \end{itemize}
 
-
+\clearpage
 \section{Completeness}
 \label{sec:1.7_completeness}
 
