@@ -171,143 +171,147 @@ L'\textbf{Autorità Elettorale (AE)} è l'entità il cui compito è quello di ri
 
 Il \textbf{Verificatore Pubblico} è un attore indipendente e passivo, che può essere un osservatore esterno, un comitato di controllo o l'elettore stesso. Il suo unico scopo è verificare che le operazioni di voto e di scrutinio si svolgano in modo corretto. Questa entità non partecipa alla creazione dei voti e non si occupa di raccoglierli, ma interviene esaminando le prove e i dati pubblici messi a disposizione dall'Autorità Elettorale. La presenza del Verificatore Pubblico è indispensabile per realizzare la verificabilità universale, dando a chiunque la possibilità di accertarsi, in totale autonomia, che il risultato finale pubblicato sia l'esatto calcolo delle schede memorizzate nell'urna. L'inserimento di questa figura nel modello è fondamentale per garantire la trasparenza del processo elettorale e per rafforzare la fiducia degli elettori nei confronti del sistema di voto elettronico adottato.
 
+\vspace{1.5cm}
 \begin{figure}[H]
     \centering
 
     \begin{tikzpicture}[
-        font=\small,
+        node distance=1.5cm and 3.0cm,
         actor/.style={
             rectangle,
-            rounded corners=6pt,
+            rounded corners=5pt,
             draw=black!75,
             line width=1pt,
-            fill=gray!8,
-            text width=3.15cm,
+            fill=gray!10,
+            text width=2.9cm,
             align=center,
-            minimum height=1.25cm,
-            inner sep=6pt
+            minimum height=1.35cm,
+            font=\small
         },
         storage/.style={
             rectangle,
             draw=black!75,
             line width=1pt,
-            fill=gray!20,
-            text width=3.25cm,
+            fill=gray!22,
+            text width=2.9cm,
             align=center,
-            minimum height=1.15cm,
-            inner sep=6pt
-        },
-        trustarea/.style={
-            draw=black!30,
-            dashed,
-            rounded corners=8pt,
-            inner xsep=12pt,
-            inner ysep=12pt
+            minimum height=1.1cm,
+            font=\small
         },
         arr/.style={
             -{Stealth[length=6pt, width=4pt]},
-            line width=1pt,
-            black!75
+            line width=1pt
         },
         lbl/.style={
             font=\footnotesize,
-            inner sep=2.5pt,
+            inner sep=2pt,
             fill=white,
-            text=black!70
+            align=center
         }
     ]
 
-        \node[actor] (elettore) at (0,0) {
-            \textbf{Elettore}\\[-1pt]
-            \footnotesize seleziona e invia la scheda
+        % Nodi principali
+        \node[actor] (sa) {
+            \textbf{SA}\\[2pt]
+            Sistema di\\Autenticazione
         };
 
-        \node[actor, left=3.35cm of elettore] (sa) {
-            \textbf{SA}\\[-1pt]
-            \footnotesize Sistema di Autenticazione
+        \node[actor, right=of sa] (elettore) {
+            \textbf{Elettore}
         };
 
-        \node[actor, right=3.35cm of elettore] (ae) {
-            \textbf{AE}\\[-1pt]
-            \footnotesize Autorità Elettorale
+        \node[actor, right=of elettore] (ae) {
+            \textbf{AE}\\[2pt]
+            Autorità\\Elettorale
         };
 
-        \node[storage, below=1.7cm of ae] (urna) {
-            \textbf{Urna / Bacheca}\\[-1pt]
-            \footnotesize record pubblici
+        \node[storage, below=of ae] (urna) {
+            Urna Pubblica
         };
 
-        \node[actor, below=1.7cm of elettore] (vp) {
-            \textbf{Verificatore}\\[-1pt]
-            \footnotesize controlla dati e prove
+        \node[actor, below=of urna] (vp) {
+            \textbf{Verificatore}\\[2pt]
+            \textbf{Pubblico}
         };
 
-        \begin{scope}[on background layer]
-            \node[
-                trustarea,
-                fit=(sa),
-                label={[font=\footnotesize, text=black!55]above:Dominio identità}
-            ] {};
-
-            \node[
-                trustarea,
-                fit=(ae)(urna),
-                label={[font=\footnotesize, text=black!55]above:Dominio voto}
-            ] {};
-        \end{scope}
+        % Flussi informativi
+        \draw[arr, bend left=18]
+            (elettore) to
+            node[lbl, below] {credenziali}
+            (sa);
 
         \draw[arr, bend left=18]
-            (elettore.north west) to
-            node[lbl, above] {richiesta di accesso}
-            (sa.north east);
-
-        \draw[arr, bend left=18]
-            (sa.south east) to
-            node[lbl, below] {abilitazione pseudonima}
-            (elettore.south west);
+            (sa) to
+            node[lbl, above] {token anonimo}
+            (elettore);
 
         \draw[arr]
             (elettore) --
-            node[lbl, above] {scheda protetta}
+            node[lbl, above] {scheda cifrata\\+ token}
             (ae);
 
         \draw[arr]
             (ae) --
-            node[lbl, right] {registrazione}
+            node[lbl, right] {inserisce}
             (urna);
 
         \draw[arr]
             (urna) --
-            node[lbl, below] {dati verificabili}
+            node[lbl, right] {prove + risultati}
             (vp);
 
+        % Separazione logica SA / AE
         \draw[dashed, black!45, line width=0.9pt]
-            (sa.north east)
-            .. controls ($(sa.north)+(2.4,0.8)$) and ($(ae.north)+(-2.4,0.8)$) ..
-            node[lbl, above] {$\times$ separazione SA/AE}
-            (ae.north west);
+            ([yshift=0.75cm]sa.north) --
+            ([yshift=0.75cm]ae.north);
+
+        \draw[dashed, black!45, line width=0.9pt]
+            (sa.north) --
+            ([yshift=0.75cm]sa.north);
+
+        \draw[dashed, black!45, line width=0.9pt]
+            (ae.north) --
+            ([yshift=0.75cm]ae.north);
 
         \node[
             font=\footnotesize\itshape,
-            text=black!55,
-            below=4pt of sa
+            black!50,
+            fill=white,
+            inner sep=2pt,
+            align=center
+        ] at ($(sa.north)!0.5!(ae.north)+(0,0.95)$) {
+            $\times$ nessuna comunicazione diretta\\
+            (non colludono)
+        };
+
+        % Note descrittive
+        \node[
+            font=\footnotesize\itshape,
+            text=black!50,
+            align=center,
+            below=0.30cm of sa
         ] {
-            conosce chi è abilitato
+            sa \textit{chi} vota
         };
 
         \node[
             font=\footnotesize\itshape,
-            text=black!55,
-            below=4pt of ae
+            text=black!50,
+            align=center,
+            above=0.30cm of ae
         ] {
-            gestisce le schede, non le identità reali
+            sa \textit{cosa} viene votato
         };
 
     \end{tikzpicture}
 
-    \caption{Architettura logica degli attori e separazione dei flussi informativi: il SA gestisce l'identità e l'abilitazione, mentre l'AE gestisce la raccolta delle schede.}
+    \caption{Architettura degli attori e flussi informativi: SA e AE non comunicano tra loro, garantendo che nessun singolo attore possa collegare identità e preferenza espressa.}
     \label{fig:architettura_attori}
 \end{figure}
+
+
+
+
 
 
 \clearpage
