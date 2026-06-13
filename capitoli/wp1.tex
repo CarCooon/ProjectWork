@@ -437,6 +437,69 @@ Questa categoria rappresenta il fondamento della trasparenza del sistema. Poich�
     \item \textbf{[VER-2] Verificabilità Universale:} Garantisce che il Verificatore Pubblico, o qualsiasi osservatore esterno, possa convalidare matematicamente l'esito delle elezioni partendo esclusivamente dai dati pubblicati a fine scrutinio. Si tratta di una contromisura definitiva per impedire all'Autorità Elettorale di manipolare il risultato finale all'insaputa degli elettori.
 \end{itemize}
 
+\begin{figure}[H]
+    \centering
+    \begingroup
+    \small
+    \setlength{\tabcolsep}{2pt}
+    \renewcommand{\arraystretch}{1.35}
+    \setlength{\arrayrulewidth}{0.8pt}
+    \arrayrulecolor{black!75}
+    \begin{tabular}{@{}
+        >{\columncolor{gray!8}\raggedright\arraybackslash}p{3.3cm}
+        | >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+        | >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+        | >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+        | >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+        | >{\centering\arraybackslash}p{0.78cm}
+          >{\centering\arraybackslash}p{0.78cm}
+        @{}}
+    \hline
+    \rowcolor{gray!20}\cellcolor{gray!8}
+        & \multicolumn{2}{c|}{\cellcolor{gray!20}\makecell{\textbf{Autenticità}}}
+        & \multicolumn{2}{c|}{\cellcolor{gray!20}\textbf{Unicità}}
+        & \multicolumn{3}{c|}{\cellcolor{gray!20}\textbf{Segretezza}}
+        & \multicolumn{3}{c|}{\cellcolor{gray!20}\textbf{Integrità}}
+        & \multicolumn{2}{>{\columncolor{gray!20}\centering\arraybackslash}p{1.7cm}}{
+            \resizebox{1.50cm}{!}{\textbf{Verificabilità}}
+        } \\    
+        \cellcolor{gray!8}\textbf{Avversario}\rule{0pt}{1.4cm}
+        & \cellcolor{gray!12}\rotatebox{90}{AUTH-1~}
+        & \cellcolor{gray!12}\rotatebox{90}{AUTH-2~}
+        & \cellcolor{gray!12}\rotatebox{90}{UNIQ-1~}
+        & \cellcolor{gray!12}\rotatebox{90}{UNIQ-2~}
+        & \cellcolor{gray!12}\rotatebox{90}{SEC-1~~}
+        & \cellcolor{gray!12}\rotatebox{90}{SEC-2~~}
+        & \cellcolor{gray!12}\rotatebox{90}{SEC-3~~}
+        & \cellcolor{gray!12}\rotatebox{90}{INT-1~~}
+        & \cellcolor{gray!12}\rotatebox{90}{INT-2~~}
+        & \cellcolor{gray!12}\rotatebox{90}{INT-3~~}
+        & \cellcolor{gray!12}\rotatebox{90}{VER-1~}
+        & \cellcolor{gray!12}\rotatebox{90}{VER-2~} \\
+    \hline
+    Avversario di Rete & & & & $\bullet$ & $\bullet$ & $\triangle$ & & $\bullet$ & & & & \\
+    Attaccante DoS     & & & & & & & & & & & & \\
+    Falsario           & & $\bullet$ & & & & & & & $\bullet$ & & & \\
+    Elettore Disonesto & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & & & $\bullet$ & & & & & \\
+    Coercitore         & & & & & & & $\triangle$ & & & & & \\
+    SA Disonesto       & & & & & & $\bullet$ & & & & & & \\
+    AE Disonesta       & & & & & $\bullet$ & & & & & $\triangle$ & $\bullet$ & $\bullet$ \\
+    \hline
+    \end{tabular}
+    \endgroup
+    \vspace{4pt}
+    \footnotesize
+    $\bullet$\;difesa diretta \quad $\triangle$\;difesa parziale o condizionale 
+    \caption{Matrice di copertura minacce--proprietà. La riga dell'Attaccante DoS è interamente vuota: nessuna micro-proprietà affronta la minaccia alla disponibilità del servizio.}
+    \label{fig:matrice_minacce}
+\end{figure}
+
 \clearpage
 \section{Completeness}
 \label{sec:1.7_completeness}
