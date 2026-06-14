@@ -80,36 +80,266 @@ Il protocollo realizza l'autenticazione degli elettori secondo il modello di \te
 
 Le Fasi dalla 0 alla 3 descrivono il percorso cronologico ideale dell'intero processo elettorale, dalla configurazione crittografica iniziale fino alla ricezione e registrazione sicura della scheda nell'urna pubblica. 
 
-Il seguente diagramma di sequenza illustra ad alto livello le interazioni di rete tra i tre attori fondamentali (Elettore, Sistema di Autenticazione e Autorità Elettorale) durante le fasi attive di voto (Fasi 1-3). Ogni singola operazione riportata nel diagramma verrà analizzata tecnicamente nelle sottosezioni successive.
+La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tra i tre attori fondamentali (Elettore, Sistema di Autenticazione e Autorità Elettorale) nelle fasi attive di voto (Fasi~1--3), con i messaggi scambiati e le computazioni locali di ciascun attore. Le sottosezioni successive analizzano tecnicamente ogni operazione.
 
-\vspace{1.5cm}
-\begin{figure}[h!]
-\centering
-\begin{verbatim}
-  Elettore                        SA                           AE
-     |                             |                            |
-     |-- 1. Handshake TLS -------->|                            |
-     |      (Autenticazione con    |                            |
-     |      credenziali d'Ateneo)  |                            |
-     |                             |                            |
-     |<-- 2. Rilascio di C_p ------|                            |
-     |                             |                            |
-     |-- 3. Handshake TLS ------------------------------------->|
-     |                                                          |
-     |   4. Invio del pacchetto di voto:                        |
-     |      M = (C, C_p, \eta, id_{elezione}, \sigma)           |
-     |--------------------------------------------------------->|
-     |                                                          |
-     |                                           5. [Esecuzione |
-     |                                               Controlli] |
-     |                                                          |
-     |<--------------------------------------- 6. Rilascio di R |
-     |                             |                            |
-     | 7. [Cancellazione locale    |                            |
-     |     della chiave PR_v]      |                            |
-\end{verbatim}
-\caption{Diagramma di sequenza del flusso di sottomissione del voto.}
-\label{fig:diagramma_sequenza}
+\begin{figure}[!p]
+    \centering
+
+    \resizebox{0.97\linewidth}{!}{%
+    \begin{tikzpicture}[
+        actor/.style={
+            rectangle,
+            draw=black!65,
+            fill=gray!10,
+            minimum width=3.4cm,
+            minimum height=0.80cm,
+            font=\small\bfseries,
+            rounded corners=2pt,
+            line width=0.7pt
+        },
+        lline/.style={
+            gray!40,
+            thin,
+            densely dashed
+        },
+        msg/.style={
+            -{Stealth[length=3mm, width=2mm]},
+            line width=0.9pt,
+            black!80
+        },
+        mlbl/.style={
+            font=\small,
+            fill=white,
+            inner sep=1.5pt,
+            align=center
+        },
+        actbox/.style={
+            rectangle,
+            draw=black!35,
+            fill=gray!18,
+            line width=0.5pt
+        },
+        sbox/.style={
+            rectangle,
+            draw=black!50,
+            fill=gray!8,
+            rounded corners=3pt,
+            font=\small,
+            align=left,
+            inner sep=6pt,
+            line width=0.5pt
+        },
+        abox/.style={
+            rectangle,
+            draw=black!45,
+            fill=gray!6,
+            rounded corners=2pt,
+            font=\small,
+            align=left,
+            inner sep=4pt,
+            line width=0.4pt
+        },
+        phlbl/.style={
+            rectangle,
+            draw=gray!60,
+            fill=gray!12,
+            rounded corners=3pt,
+            font=\small\bfseries,
+            align=center,
+            inner sep=5pt,
+            line width=0.5pt
+        }
+    ]
+
+        \def\xE{0}
+        \def\xSA{8}
+        \def\xAE{16}
+
+        % Attori
+        \node[actor] (E)  at (\xE,0)  {Elettore};
+        \node[actor] (SA) at (\xSA,0) {SA};
+        \node[actor] (AE) at (\xAE,0) {AE};
+
+        % Lifeline
+        \draw[lline] (\xE,-0.40)  -- (\xE,-25.4);
+        \draw[lline] (\xSA,-0.40) -- (\xSA,-25.4);
+        \draw[lline] (\xAE,-0.40) -- (\xAE,-25.4);
+
+        %==============================================================
+        % FASE 1 --- Autenticazione ed emissione di C_p
+        %==============================================================
+
+        \node[phlbl] at (-2.6,-4.8) {
+            \textbf{Fase~1}\\[4pt]
+            Autenticazione
+        };
+
+        \draw[actbox] (\xE-0.22,-1.4) rectangle (\xE+0.22,-9.4);
+        \draw[actbox] (\xSA-0.22,-2.4) rectangle (\xSA+0.22,-8.4);
+
+        % Generazione della coppia effimera
+        \draw[gray!45, thin]
+            (\xE+0.22,-2.0) --
+            (\xE+0.9,-2.0);
+
+        \node[abox, anchor=west] at (\xE+1.0,-2.0) {
+            Genera coppia RSA effimera $(PU_v,\;PR_v)$
+        };
+
+        % Elettore -> SA
+        \draw[msg]
+            (\xE+0.22,-3.6) --
+            (\xSA-0.22,-3.6);
+
+        \node[mlbl, above] at ({(\xE+0.22+\xSA-0.22)/2},-3.6) {
+            apertura canale TLS~~$\cdot$~~SSO/MFA~~$\cdot$~~$PU_v$
+        };
+
+        % SA -> Elettore
+        \draw[msg]
+            (\xSA-0.22,-5.0) --
+            (\xE+0.22,-5.0);
+
+        \node[mlbl, above] at ({(\xE+0.22+\xSA-0.22)/2},-5.0) {
+            \textit{nonce}~(\textit{challenge} proof-of-possession)
+        };
+
+        % Elettore -> SA
+        \draw[msg]
+            (\xE+0.22,-6.4) --
+            (\xSA-0.22,-6.4);
+
+        \node[mlbl, above] at ({(\xE+0.22+\xSA-0.22)/2},-6.4) {
+            $\mathrm{Sign}_{PR_v}(\mathit{nonce})$
+        };
+
+        % SA -> Elettore: certificato pseudonimo
+        \draw[msg]
+            (\xSA-0.22,-8.2) --
+            (\xE+0.22,-8.2);
+
+        \node[mlbl, above, align=center] at ({(\xE+0.22+\xSA-0.22)/2},-8.2) {%
+            $C_p = \bigl\{PU_v,\;\;id_{\text{elezione}},\;\;t_{\text{finestra}},$\\[1pt]
+            $\quad\mathrm{Sign}_{PR_{SA}}\!\bigl(H(PU_v \mathbin{\|}
+                id_{\text{elezione}} \mathbin{\|} t_{\text{finestra}})\bigr)\bigr\}$
+        };
+
+        %==============================================================
+        % FASE 2 --- Costruzione locale della scheda
+        %==============================================================
+
+        \node[phlbl] at (-2.6,-11.8) {
+            \textbf{Fase~2}\\[4pt]
+            Costruzione\\scheda
+        };
+
+        \draw[actbox]
+            (\xE-0.22,-9.9) rectangle
+            (\xE+0.22,-14.2);
+
+        \node[sbox, anchor=west, minimum width=6.5cm] at (\xE+0.5,-12.0) {%
+            $C \leftarrow \mathrm{RSA\text{-}OAEP\text{-}Enc}(PU_{ele},\;i;\;r)$\\[5pt]
+            $\eta \leftarrow \mathrm{CSPRNG}(256)$\\[5pt]
+            $\sigma \leftarrow \mathrm{Sign}_{PR_v}\!\bigl(H(C \mathbin{\|}
+                C_p \mathbin{\|} \eta \mathbin{\|} id_{\text{elezione}})\bigr)$\\[5pt]
+            $M = (C,\;C_p,\;\eta,\;id_{\text{elezione}},\;\sigma)$
+        };
+
+        %==============================================================
+        % FASE 3 --- Ricezione, validazione e ricevuta
+        %==============================================================
+
+        \node[phlbl] at (-2.6,-19.1) {
+            \textbf{Fase~3}\\[4pt]
+            Ricezione\,\&\\Ricevuta
+        };
+
+        % Elettore -> AE
+        \draw[msg]
+            (\xE+0.22,-15.2) --
+            (\xAE-0.22,-15.2);
+
+        \node[mlbl, above] at ({(\xE+0.22+\xAE-0.22)/2},-15.2) {
+            $M = (C,\;C_p,\;\eta,\;id_{\text{elezione}},\;\sigma)$
+            \quad[\textit{su canale TLS}]
+        };
+
+        % Attivazione AE: controlli
+        \draw[actbox]
+            (\xAE-0.22,-15.7) rectangle
+            (\xAE+0.22,-19.9);
+
+        \draw[gray!45, thin]
+            (\xAE-0.22,-17.8) --
+            (\xAE-0.6,-17.8);
+
+        \node[abox, anchor=east, minimum width=6.2cm] at (\xAE-0.7,-17.8) {%
+            \textbf{Controlli sequenziali (esito binario):}\\[5pt]
+            (1)~Autorizzazione:\;verifica $\mathrm{Sign}_{PR_{SA}}$ su $C_p$\\[3pt]
+            (2)~Unicità:\;$PU_v \notin \texttt{Registro\_Effimeri\_AE}$\\[3pt]
+            (3)~Anti-replay:\;$\eta \notin \texttt{Registro\_Nonce\_AE}$\\[3pt]
+            (4)~Integrità:\;verifica $\sigma$ con $PU_v$
+        };
+
+        % Calcolo di j, K_j e F_j
+        \draw[gray!45, thin]
+            (\xAE-0.22,-20.6) --
+            (\xAE-0.6,-20.6);
+
+        \node[sbox, anchor=east, minimum width=4.7cm] at (\xAE-0.7,-20.6) {%
+            assegna indice progressivo $j$\\[5pt]
+            $K_j = H(C_j)$\quad[\textit{commitment}]\\[5pt]
+            $F_j = H(K_j \mathbin{\|} \eta_j)$\quad[\textit{fingerprint}]
+        };
+
+        % Lifeline
+        \draw[lline] (\xE,-0.40)  -- (\xE,-26.3);
+        \draw[lline] (\xSA,-0.40) -- (\xSA,-26.3);
+        \draw[lline] (\xAE,-0.40) -- (\xAE,-26.3);
+            
+        % AE -> Elettore: ricevuta
+        \draw[msg]
+            (\xAE-0.22,-22.5) --
+            (\xE+0.22,-22.5);
+            
+        \node[mlbl, above] at ({(\xE+0.22+\xAE-0.22)/2},-22.5) {
+            $R = \mathrm{Sign}_{PR_{AE}}\!\bigl(H(K_j \mathbin{\|}
+                F_j \mathbin{\|} j \mathbin{\|} id_{\text{elezione}})\bigr)$
+        };
+            
+        % Elettore: cancellazione locale dopo verifica di R
+        \draw[actbox]
+            (\xE-0.22,-23.3) rectangle
+            (\xE+0.22,-24.6);
+            
+        \draw[gray!45, thin]
+            (\xE+0.22,-23.95) --
+            (\xE+0.9,-23.95);
+            
+        \node[abox, anchor=west, fill=gray!8, draw=gray!45] at (\xE+1.0,-23.95) {
+            dopo la verifica di $R$, cancella $PR_v$ e $r$\\
+            \textit{(cancellazione sicura del materiale effimero)}
+        };
+            
+        % AE: pubblicazione differita del record
+        \draw[actbox]
+            (\xAE-0.22,-24.9) rectangle
+            (\xAE+0.22,-25.9);
+            
+        \draw[gray!45, thin]
+            (\xAE-0.22,-25.4) --
+            (\xAE-0.6,-25.4);
+            
+        \node[abox, anchor=east, fill=gray!8, draw=gray!45] at (\xAE-0.7,-25.4)         {%
+            differisce la pubblicazione di $Record_j$\\
+            nell'urna pubblica alla finestra temporale prevista
+        };
+
+    \end{tikzpicture}%
+    }
+
+    \caption{Diagramma di sequenza delle Fasi~1--3: interazioni crittografiche tra Elettore, SA~e~AE.}
+    \label{fig:diagramma_sequenza}
 \end{figure}
 
 \subsection{Fase 0 --- Setup pre-elezione e distribuzione delle chiavi}
