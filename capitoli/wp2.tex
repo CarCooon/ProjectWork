@@ -161,9 +161,9 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
         \node[actor] (AE) at (\xAE,0) {AE};
 
         % Lifeline
-        \draw[lline] (\xE,-0.40)  -- (\xE,-25.4);
-        \draw[lline] (\xSA,-0.40) -- (\xSA,-25.4);
-        \draw[lline] (\xAE,-0.40) -- (\xAE,-25.4);
+        \draw[lline] (\xE,-0.40)  -- (\xE,-26.3);
+        \draw[lline] (\xSA,-0.40) -- (\xSA,-26.3);
+        \draw[lline] (\xAE,-0.40) -- (\xAE,-26.3);
 
         %==============================================================
         % FASE 1 --- Autenticazione ed emissione di C_p
@@ -267,7 +267,7 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
         % Attivazione AE: controlli
         \draw[actbox]
             (\xAE-0.22,-15.7) rectangle
-            (\xAE+0.22,-19.9);
+            (\xAE+0.22,-22);
 
         \draw[gray!45, thin]
             (\xAE-0.22,-17.8) --
@@ -291,11 +291,6 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
             $K_j = H(C_j)$\quad[\textit{commitment}]\\[5pt]
             $F_j = H(K_j \mathbin{\|} \eta_j)$\quad[\textit{fingerprint}]
         };
-
-        % Lifeline
-        \draw[lline] (\xE,-0.40)  -- (\xE,-26.3);
-        \draw[lline] (\xSA,-0.40) -- (\xSA,-26.3);
-        \draw[lline] (\xAE,-0.40) -- (\xAE,-26.3);
             
         % AE -> Elettore: ricevuta
         \draw[msg]
@@ -577,7 +572,7 @@ Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, 
 %-----------------------------------------------------------
 % Coordinate X dei centri dei blocchi
 %-----------------------------------------------------------
-\def\xZ{0}       % Record_0 (genesi)
+\def\xZ{-0.5}    % Record_0 (genesi)
 \def\xA{3.2}     % Record_1
 \def\xB{6.4}     % Record_2
 \def\xC{10.4}    % Record_{n-1}
@@ -602,9 +597,10 @@ Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, 
 %--- Record_0 (genesi) ---
 \node[ghead] at (\xZ, \yHT) {$Record_0$ (genesi)};
 \node[gbody] at (\xZ, \yHB) {%
-  \textit{Params:}\\[3pt]
-  $id_{\text{el}},\;PU_{ele},\;N,$\\
-  $t_{\text{ap}},\;t_{\text{ch}}$\\[4pt]
+  \textit{Params:}\\[2pt]
+  $id_{\text{el}},\;PU_{ele},\;N,$\\[2pt]
+  lista\_candidati,\\[2pt]
+  $t_{\text{ap}},\;t_{\text{ch}}$\\[2pt]
   $\mathrm{Sign}_{PR_{AE}}(H(\mathit{Params}))$};
 
 %--- Record_1 ---
@@ -655,7 +651,7 @@ Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, 
 %===========================================================
 % FRECCE HASH POINTER
 %===========================================================
-\draw[hptr]  ({\xZ+1.35},\yarr) -- ({\xA-1.25},\yarr);
+\draw[hptr]  ({\xZ+1.68},\yarr) -- ({\xA-1.25},\yarr);
 \draw[hptr]  ({\xA+1.25},\yarr) -- ({\xB-1.25},\yarr);
 \draw[hdots] ({\xB+1.25},\yarr) -- ({\xC-1.25},\yarr)
   node[midway, above, font=\footnotesize, text=black!45,
@@ -921,6 +917,16 @@ L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta
 \draw[extarr] (proof.west)   -- (s3.east);
 \draw[extarr] (rootpub.west) -- (cmp.east);
 
+%--- Ricevuta R (dettaglio laterale) ---
+\node[ebox, minimum width=5.2cm] (rbox) at (\xR, 0) {%
+  \textbf{Ricevuta} $R$\\[3pt]
+  $K_j,\;F_j,\;j,\;id_{\text{elezione}}$\\[3pt]
+  $\mathrm{Sign}_{PR_{AE}}\!\bigl(H(K_j \mathbin{\|}$
+  $F_j \mathbin{\|} j \mathbin{\|} id_{\text{elezione}})\bigr)$\\[2pt]
+  {\footnotesize\itshape (vincola l'elettore al nodo $F_j$)}%
+};
+\draw[extarr] (rbox.west) -- (local.east);
+
 \end{tikzpicture}%
 }
 \caption{Flusso di verifica individuale \textbf{[VER-1]}: l'elettore deriva $K{=}H(C)$ e
@@ -936,7 +942,7 @@ L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta
 
 Cardine della verifica è la ricevuta $R$, che vincola $K_j$, $F_j$, $j$ e $id_{elezione}$ con la firma dell'AE. La ricevuta attesta ricezione e inclusione del pacchetto cifrato ma non espone la preferenza $i_j$ né i parametri per decifrarla: il sistema realizza quindi un'\textbf{assenza di ricevuta rivelante}, che riduce il rischio di coercizione e voto di scambio basati su prove generate dall'architettura, pur non potendo impedire prove esterne costruite dall'elettore (registrazioni dello schermo, software spia).
 
-Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$ --- autenticata dalla firma dell'AE --- per attestare l'avvenuta sottomissione e attivare un audit formale, rendendo rilevabile una manipolazione interna.
+Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$, autenticata dalla firma dell'AE, per attestare l'avvenuta sottomissione e attivare un audit formale, rendendo rilevabile una manipolazione interna.
 
 \clearpage
 \subsection{Verifica universale \texttt{[VER-2]}}
