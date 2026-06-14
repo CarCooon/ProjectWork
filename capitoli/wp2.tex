@@ -82,10 +82,10 @@ Le Fasi dalla 0 alla 3 descrivono il percorso cronologico ideale dell'intero pro
 
 La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tra i tre attori fondamentali (Elettore, Sistema di Autenticazione e Autorità Elettorale) nelle fasi attive di voto (Fasi~1--3), con i messaggi scambiati e le computazioni locali di ciascun attore. Le sottosezioni successive analizzano tecnicamente ogni operazione.
 
-\begin{figure}[!p]
+\begin{figure}[H]
     \centering
 
-    \resizebox{0.97\linewidth}{!}{%
+    \resizebox{0.95\linewidth}{!}{%
     \begin{tikzpicture}[
         actor/.style={
             rectangle,
@@ -342,6 +342,7 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
     \label{fig:diagramma_sequenza}
 \end{figure}
 
+\clearpage
 \subsection{Fase 0 --- Setup pre-elezione e distribuzione delle chiavi}
 \label{subsec:wp2_fase_setup}
 
@@ -506,9 +507,10 @@ Questa scelta progettuale separa due funzioni distinte. La \textit{hash chain} m
 
 Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, il meccanismo di pubblicazione e l'indice di verifica individuale.
 
-\begin{figure}[!p]
+\begin{figure}[!htbp]
+\vspace{2cm}
 \centering
-\resizebox{0.98\linewidth}{!}{%
+\resizebox{1\linewidth}{!}{%
 \begin{tikzpicture}[
   %--- stile intestazione blocco ---
   bhead/.style={
@@ -726,6 +728,7 @@ Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, 
 \label{fig:urna_ibrida}
 \end{figure}
 
+\clearpage
 \subsection{Append-only log basato su hash chain}
 \label{subsec:wp2_hash_chain}
 
@@ -836,9 +839,9 @@ L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta
     \item opzionalmente, scarica $Record_j$ dalla hash chain e verifica che il $K_j$ pubblicato coincida con il proprio $K$.
 \end{enumerate}
 
-\begin{figure}[!p]
+\begin{figure}[H]
 \centering
-\resizebox{0.78\linewidth}{!}{%
+\resizebox{0.8\linewidth}{!}{%
 \begin{tikzpicture}[
   lbox/.style={rectangle, draw=black!60, fill=gray!20,
     rounded corners=3pt, minimum width=6.2cm, minimum height=1.0cm,
@@ -928,12 +931,14 @@ L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta
   Il passo 4 (opzionale) verifica la coerenza con il commitment $K_j$
   pubblicato nella hash chain, usando l'indice $j$ estratto dalla ricevuta $R$.}
 \label{fig:verifica_individuale}
+\vspace{0.8cm}
 \end{figure}
 
 Cardine della verifica è la ricevuta $R$, che vincola $K_j$, $F_j$, $j$ e $id_{elezione}$ con la firma dell'AE. La ricevuta attesta ricezione e inclusione del pacchetto cifrato ma non espone la preferenza $i_j$ né i parametri per decifrarla: il sistema realizza quindi un'\textbf{assenza di ricevuta rivelante}, che riduce il rischio di coercizione e voto di scambio basati su prove generate dall'architettura, pur non potendo impedire prove esterne costruite dall'elettore (registrazioni dello schermo, software spia).
 
 Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$ --- autenticata dalla firma dell'AE --- per attestare l'avvenuta sottomissione e attivare un audit formale, rendendo rilevabile una manipolazione interna.
 
+\clearpage
 \subsection{Verifica universale \texttt{[VER-2]}}
 \label{subsec:wp2_verifica_universale}
 
