@@ -506,6 +506,226 @@ Questa scelta progettuale separa due funzioni distinte. La \textit{hash chain} m
 
 Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, il meccanismo di pubblicazione e l'indice di verifica individuale.
 
+\begin{figure}[!p]
+\centering
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[
+  %--- stile intestazione blocco ---
+  bhead/.style={
+    rectangle, draw=black!60, fill=gray!22,
+    minimum width=2.5cm, minimum height=0.54cm,
+    font=\footnotesize\bfseries, inner sep=3pt,
+    line width=0.55pt, anchor=north
+  },
+  %--- stile corpo blocco (dati record) ---
+  bbody/.style={
+    rectangle, draw=black!60, fill=gray!6,
+    minimum width=2.5cm, minimum height=2.7cm,
+    font=\footnotesize, align=left, inner sep=5pt,
+    line width=0.55pt, anchor=north
+  },
+  %--- intestazione genesi (colore diverso) ---
+  ghead/.style={bhead, fill=blue!13, minimum width=2.7cm},
+  gbody/.style={bbody, minimum width=2.7cm},
+  %--- intestazione chiusura ---
+  chead/.style={bhead, fill=gray!38, minimum width=2.5cm},
+  cbody/.style={bbody, minimum height=2.2cm},
+  %--- frecce hash pointer ---
+  hptr/.style={
+    -{Stealth[length=2.5mm, width=1.5mm]},
+    line width=0.8pt, black!70
+  },
+  %--- freccia tratteggiata (gap ···) ---
+  hdots/.style={hptr, densely dashed, black!40},
+  %--- foglie Merkle ---
+  mleaf/.style={
+    rectangle, draw=black!55, fill=blue!11,
+    rounded corners=2pt,
+    minimum width=1.55cm, minimum height=0.65cm,
+    font=\small, inner sep=3pt, line width=0.5pt
+  },
+  %--- nodi interni Merkle ---
+  mint/.style={
+    rectangle, draw=black!55, fill=gray!14,
+    rounded corners=2pt,
+    minimum width=2.8cm, minimum height=0.65cm,
+    font=\footnotesize, align=center, inner sep=3pt,
+    line width=0.5pt
+  },
+  %--- radice Merkle ---
+  mroot/.style={
+    rectangle, draw=black!65, fill=blue!13,
+    rounded corners=3pt,
+    minimum width=5.2cm, minimum height=0.85cm,
+    font=\small\bfseries, align=center, inner sep=5pt,
+    line width=0.7pt
+  },
+  %--- archi Merkle Tree ---
+  mtree/.style={
+    -{Stealth[length=2.2mm, width=1.5mm]},
+    line width=0.75pt, black!60
+  },
+  %--- collegamento blocco -> foglia (tratteggiato) ---
+  conn/.style={
+    -{Stealth[length=2mm, width=1.5mm]},
+    dashed, gray!55, thin
+  },
+]
+
+%-----------------------------------------------------------
+% Coordinate X dei centri dei blocchi
+%-----------------------------------------------------------
+\def\xZ{0}       % Record_0 (genesi)
+\def\xA{3.2}     % Record_1
+\def\xB{6.4}     % Record_2
+\def\xC{10.4}    % Record_{n-1}
+\def\xD{13.6}    % Record_n
+\def\xX{17.0}    % Record_chiusura
+
+%-----------------------------------------------------------
+% Coordinate Y
+%-----------------------------------------------------------
+\def\yHT{-6.2}    % cima intestazione blocco
+\def\yHB{-6.74}   % giunzione intestazione/corpo
+\def\yBB{-9.74}   % fondo corpo
+\def\yarr{-8.0}   % altezza frecce hash pointer
+\def\yLeaf{-3.6}  % centro foglie Merkle
+\def\yL1{-1.5}    % centro nodi interni livello 1
+\def\yRoot{0.4}   % centro radice
+
+%===========================================================
+% BLOCCHI HASH CHAIN
+%===========================================================
+
+%--- Record_0 (genesi) ---
+\node[ghead] at (\xZ, \yHT) {$Record_0$ (genesi)};
+\node[gbody] at (\xZ, \yHB) {%
+  \textit{Params:}\\[3pt]
+  $id_{\text{el}},\;PU_{ele},\;N,$\\
+  $t_{\text{ap}},\;t_{\text{ch}}$\\[4pt]
+  $\mathrm{Sign}_{PR_{AE}}(H(\mathit{Params}))$};
+
+%--- Record_1 ---
+\node[bhead] at (\xA, \yHT) {$Record_1$};
+\node[bbody] at (\xA, \yHB) {%
+  $j = 1$\\[2pt]
+  $K_1 = H(C_1)$\\[2pt]
+  \textcolor{blue!60!black}{$F_1 = H(K_1 \| \eta_1)$}\\[2pt]
+  $H(Record_0)$\\[2pt]
+  $\mathrm{Sign}_{PR_{AE}}(\cdot)$};
+
+%--- Record_2 ---
+\node[bhead] at (\xB, \yHT) {$Record_2$};
+\node[bbody] at (\xB, \yHB) {%
+  $j = 2$\\[2pt]
+  $K_2 = H(C_2)$\\[2pt]
+  \textcolor{blue!60!black}{$F_2 = H(K_2 \| \eta_2)$}\\[2pt]
+  $H(Record_1)$\\[2pt]
+  $\mathrm{Sign}_{PR_{AE}}(\cdot)$};
+
+%--- Record_{n-1} ---
+\node[bhead] at (\xC, \yHT) {$Record_{n-1}$};
+\node[bbody] at (\xC, \yHB) {%
+  $j = n{-}1$\\[2pt]
+  $K_{n-1} = H(C_{n-1})$\\[2pt]
+  \textcolor{blue!60!black}{$F_{n-1} = H(K_{n-1}$}\\
+  \textcolor{blue!60!black}{$\| \; \eta_{n-1})$}\\[2pt]
+  $H(Record_{n-2})$\\[2pt]
+  $\mathrm{Sign}_{PR_{AE}}(\cdot)$};
+
+%--- Record_n ---
+\node[bhead] at (\xD, \yHT) {$Record_n$};
+\node[bbody] at (\xD, \yHB) {%
+  $j = n$\\[2pt]
+  $K_n = H(C_n)$\\[2pt]
+  \textcolor{blue!60!black}{$F_n = H(K_n \| \eta_n)$}\\[2pt]
+  $H(Record_{n-1})$\\[2pt]
+  $\mathrm{Sign}_{PR_{AE}}(\cdot)$};
+
+%--- Record_chiusura ---
+\node[chead] at (\xX, \yHT) {$Record_{\text{chius.}}$};
+\node[cbody] at (\xX, \yHB) {%
+  $k_{\text{totale}}$\\[3pt]
+  $\text{MerkleRoot}_{\text{fin.}}$\\[3pt]
+  $H(Record_n)$\\[3pt]
+  $\mathrm{Sign}_{PR_{AE}}(\cdot)$};
+
+%===========================================================
+% FRECCE HASH POINTER
+%===========================================================
+\draw[hptr]  ({\xZ+1.35},\yarr) -- ({\xA-1.25},\yarr);
+\draw[hptr]  ({\xA+1.25},\yarr) -- ({\xB-1.25},\yarr);
+\draw[hdots] ({\xB+1.25},\yarr) -- ({\xC-1.25},\yarr)
+  node[midway, above, font=\footnotesize, text=black!45,
+       fill=white, inner sep=1pt] {$\cdots$};
+\draw[hptr]  ({\xC+1.25},\yarr) -- ({\xD-1.25},\yarr);
+\draw[hptr]  ({\xD+1.25},\yarr) -- ({\xX-1.25},\yarr);
+
+%===========================================================
+% FOGLIE MERKLE TREE
+%===========================================================
+\node[mleaf] (l1)  at (\xA, \yLeaf) {$F_1$};
+\node[mleaf] (l2)  at (\xB, \yLeaf) {$F_2$};
+\node[mleaf] (ln1) at (\xC, \yLeaf) {$F_{n-1}$};
+\node[mleaf] (ln)  at (\xD, \yLeaf) {$F_n$};
+
+%--- Connessione blocco -> foglia (campo F_j) ---
+\draw[conn] (\xA, \yHT) -- (\xA, {\yLeaf+0.33});
+\draw[conn] (\xB, \yHT) -- (\xB, {\yLeaf+0.33});
+\draw[conn] (\xC, \yHT) -- (\xC, {\yLeaf+0.33});
+\draw[conn] (\xD, \yHT) -- (\xD, {\yLeaf+0.33});
+
+%===========================================================
+% NODI INTERNI (livello 1)
+%===========================================================
+\node[mint] (i12)  at ({(\xA+\xB)/2}, \yL1)
+  {$H(F_1 \mathbin{\|} F_2)$};
+\node[mint] (in12) at ({(\xC+\xD)/2}, \yL1)
+  {$H(F_{n-1} \mathbin{\|} F_n)$};
+
+%--- Archi foglie -> nodi interni ---
+\draw[mtree] (l1.north)  -- (i12.south);
+\draw[mtree] (l2.north)  -- (i12.south);
+\draw[mtree] (ln1.north) -- (in12.south);
+\draw[mtree] (ln.north)  -- (in12.south);
+
+%===========================================================
+% RADICE MERKLE
+%===========================================================
+\node[mroot] (root) at ({(\xA+\xD)/2}, \yRoot) {%
+  Merkle Root\\[4pt]
+  {\normalsize
+    $\mathrm{Sign}_{PR_{AE}}(\mathrm{Root})$
+    \quad$\cdot$\quad
+    $\mathrm{Sign}_{PR_{SA}}(\mathrm{Root})$}};
+
+%--- Archi nodi interni -> radice ---
+\draw[mtree] (i12.north)  -- (root.south);
+\draw[mtree] (in12.north) -- (root.south);
+
+%===========================================================
+% LINEA DI SEPARAZIONE TRA HASH CHAIN E MERKLE TREE
+%===========================================================
+\draw[gray!35, thin, densely dotted]
+  (-1.45, {(\yHT+\yLeaf)/2}) -- ({(\xX+1.35)}, {(\yHT+\yLeaf)/2});
+
+%--- Etichette livelli ---
+\node[font=\footnotesize\itshape, text=gray!65, anchor=east]
+  at (-1.55, {(\yHT+\yLeaf)/2 + 1.1}) {\textit{Merkle Tree}};
+\node[font=\footnotesize\itshape, text=gray!65, anchor=east]
+  at (-1.55, {(\yHT+\yLeaf)/2 - 1.0}) {\textit{hash chain}};
+
+\end{tikzpicture}%
+}
+\caption{Struttura ibrida dell'urna pubblica: la \textit{hash chain} (livello inferiore) collega
+  i record tramite hash pointer successivi; il \textit{Merkle Tree} (livello superiore) è costruito
+  sulle foglie $F_j$ (in blu), estratte dagli stessi record. Le frecce tratteggiate
+  indicano che il valore $F_j$ di ogni blocco coincide con la foglia corrispondente
+  nell'albero. La radice è controfirmata da AE e SA; il $Record_{\text{chius.}}$ la incorpora
+  nella catena al momento della chiusura.}
+\label{fig:urna_ibrida}
+\end{figure}
+
 \subsection{Append-only log basato su hash chain}
 \label{subsec:wp2_hash_chain}
 
@@ -608,13 +828,108 @@ I meccanismi descritti in questa sezione concretizzano il ruolo del \textbf{Veri
 \subsection{Verifica individuale \texttt{[VER-1]}}
 \label{subsec:wp2_verifica_individuale}
 
-L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta e inclusa nell'urna, soddisfacendo [VER-1]. Al termine della consultazione esegue:
+L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta e inclusa nell'urna, soddisfacendo [VER-1]. Il flusso di verifica, illustrato in Figura~\ref{fig:verifica_individuale}, si articola nei passi seguenti:
 \begin{enumerate}
     \item ricalcola il commitment $K = H(C)$;
     \item ricalcola il fingerprint $F = H(K \parallel \eta)$ con il nonce conservato localmente;
     \item richiede all'AE la prova di inclusione di $F$ e, con gli hash complementari, ricalcola il percorso fino alla radice confrontandolo con la Merkle Root definitiva;
     \item opzionalmente, scarica $Record_j$ dalla hash chain e verifica che il $K_j$ pubblicato coincida con il proprio $K$.
 \end{enumerate}
+
+\begin{figure}[!p]
+\centering
+\resizebox{0.78\linewidth}{!}{%
+\begin{tikzpicture}[
+  lbox/.style={rectangle, draw=black!60, fill=gray!20,
+    rounded corners=3pt, minimum width=6.2cm, minimum height=1.0cm,
+    font=\small, align=center, inner sep=6pt, line width=0.6pt},
+  cbox/.style={rectangle, draw=black!55, fill=gray!7,
+    rounded corners=3pt, minimum width=6.2cm, minimum height=0.9cm,
+    font=\small, align=center, inner sep=5pt, line width=0.55pt},
+  ebox/.style={rectangle, draw=black!50, fill=blue!9,
+    rounded corners=3pt, minimum width=4.8cm,
+    font=\small, align=center, inner sep=5pt, line width=0.5pt},
+  rbox/.style={rectangle, draw=black!60, fill=gray!11,
+    rounded corners=3pt, minimum width=6.2cm, minimum height=0.85cm,
+    font=\small, align=center, inner sep=5pt, line width=0.6pt},
+  okbox/.style={rectangle, draw=black!65, fill=green!18,
+    rounded corners=4pt, minimum width=5.0cm, minimum height=0.8cm,
+    font=\small\bfseries, align=center, inner sep=5pt, line width=0.7pt},
+  fbox/.style={rectangle, draw=black!35, fill=gray!5, dashed,
+    rounded corners=3pt, minimum width=6.2cm, minimum height=0.9cm,
+    font=\small, align=center, inner sep=5pt, line width=0.45pt},
+  mflow/.style={-{Stealth[length=2.4mm, width=1.5mm]},
+    line width=0.85pt, black!75},
+  extarr/.style={-{Stealth[length=2.2mm, width=1.4mm]},
+    dashed, line width=0.6pt, black!48},
+  optarr/.style={-{Stealth[length=2.4mm, width=1.5mm]},
+    dashed, line width=0.7pt, gray!55},
+]
+
+\def\xL{0}
+\def\xR{7.0}
+\def\dy{2.0}
+
+%--- Colonna principale ---
+\node[lbox] (local) at (\xL, 0) {%
+  \textbf{Dati locali dell'elettore}\\[3pt]
+  $C$~(ciphertext),\quad $\eta$~(nonce),\quad $R$~(ricevuta)};
+
+\node[cbox] (s1) at (\xL, {-1*\dy}) {%
+  \textbf{(1)}\enspace $K = H(C)$};
+
+\node[cbox] (s2) at (\xL, {-2*\dy}) {%
+  \textbf{(2)}\enspace $F = H(K \mathbin{\|} \eta)$};
+
+\node[cbox] (s3) at (\xL, {-3*\dy}) {%
+  \textbf{(3)}\enspace
+  $Root_{\text{calc}} = H(\cdots H(H(F \mathbin{\|} h_0) \mathbin{\|} h_1) \cdots)$};
+
+\node[rbox] (cmp) at (\xL, {-4*\dy}) {%
+  $Root_{\text{calc}} \stackrel{?}{=} Root_{\text{pubbl.}}$};
+
+\node[okbox] (ok) at (\xL, {-5*\dy}) {%
+  \textbf{[VER-1]}\enspace inclusione verificata};
+
+\node[fbox] (s4) at (\xL, {-6.4*\dy}) {%
+  \textbf{(4)}~\emph{(opzionale)}\enspace
+  scarica $Record_j$ ($j$ da $R$):\\[2pt]
+  verifica $K_j \stackrel{?}{=} K$};
+
+%--- Frecce del flusso principale ---
+\draw[mflow] (local.south) -- (s1.north);
+\draw[mflow] (s1.south)    -- (s2.north);
+\draw[mflow] (s2.south)    -- (s3.north);
+\draw[mflow] (s3.south)    -- (cmp.north);
+\draw[mflow] (cmp.south)   -- (ok.north);
+\draw[optarr] (ok.south)   -- (s4.north);
+
+%--- Colonna esterna (AE / urna pubblica) ---
+\node[ebox] (proof) at (\xR, {-3*\dy}) {%
+  Prova $\pi = (h_0, h_1, \dots, h_t)$\\[3pt]
+  \footnotesize(da AE, su richiesta)};
+
+\node[ebox] (rootpub) at (\xR, {-4*\dy}) {%
+  $Root_{\text{pubbl.}}$\\[2pt]
+  $\mathrm{Sign}_{PR_{AE}}(Root)\;\cdot\;\mathrm{Sign}_{PR_{SA}}(Root)$\\[3pt]
+  \footnotesize(dall'urna pubblica)};
+
+%--- Frecce dai nodi esterni ---
+\draw[extarr] (proof.west)   -- (s3.east);
+\draw[extarr] (rootpub.west) -- (cmp.east);
+
+\end{tikzpicture}%
+}
+\caption{Flusso di verifica individuale \textbf{[VER-1]}: l'elettore deriva $K{=}H(C)$ e
+  $F{=}H(K\|\eta)$ dai propri dati locali (passi 1--2), poi ottiene
+  dall'AE la prova di inclusione $\pi$ e ricalcola il percorso Merkle
+  fino alla radice (passo 3). Il confronto con $Root_{\text{pubbl.}}$,
+  co-firmata da AE e SA, attesta l'inclusione della scheda nell'urna.
+  Il passo 4 (opzionale) verifica la coerenza con il commitment $K_j$
+  pubblicato nella hash chain, usando l'indice $j$ estratto dalla ricevuta $R$.}
+\label{fig:verifica_individuale}
+\end{figure}
+
 Cardine della verifica è la ricevuta $R$, che vincola $K_j$, $F_j$, $j$ e $id_{elezione}$ con la firma dell'AE. La ricevuta attesta ricezione e inclusione del pacchetto cifrato ma non espone la preferenza $i_j$ né i parametri per decifrarla: il sistema realizza quindi un'\textbf{assenza di ricevuta rivelante}, che riduce il rischio di coercizione e voto di scambio basati su prove generate dall'architettura, pur non potendo impedire prove esterne costruite dall'elettore (registrazioni dello schermo, software spia).
 
 Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$ --- autenticata dalla firma dell'AE --- per attestare l'avvenuta sottomissione e attivare un audit formale, rendendo rilevabile una manipolazione interna.
