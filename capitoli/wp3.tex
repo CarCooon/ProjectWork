@@ -83,7 +83,9 @@ Qualora l'elettore provi a inviare nuovamente lo stesso identico pacchetto, l'at
 
 \paragraph{Tentativo di estrazione di una ricevuta rivelante (Voto di scambio):} L'elettore disonesto intende collaborare con un coercitore o un acquirente di voti, cercando di ottenere dal sistema una prova crittografica che dimostri inequivocabilmente per quale lista ha votato. Il protocollo neutralizza questo vettore tramite due scelte strutturali definite in Fase 2 e Fase 3:
 \begin{itemize}
-    \item La ricevuta ufficiale $R$ rilasciata dall'AE e firmata con $PR_{AE}$ copre unicamente i parametri offuscati della transazione: $R = \text{Sign}_{PR_{AE}}(H(K_j \parallel F_j \parallel j \parallel id_{elezione}))$. Essa attesta l'avvenuta inclusione della scheda cifrata, ma non espone né il voto in chiaro $i$, né il fattore di randomizzazione $r$ di RSA-OAEP. Di conseguenza, $R$ costituisce una ricevuta non rivelante.
+    \item La ricevuta ufficiale $R$ rilasciata dall'AE è una tupla autenticata che copre unicamente i parametri offuscati della transazione:
+    $R = \bigl(K_j,\; F_j,\; j,\; id_{elezione},\; \text{Sign}_{PR_{AE}}\!\bigl(H(K_j \parallel F_j \parallel j \parallel id_{elezione})\bigr)\bigr)$.
+    Essa attesta l'avvenuta inclusione della scheda cifrata, ma non espone né il voto in chiaro $i$, né il fattore di randomizzazione $r$ di RSA-OAEP. Di conseguenza, $R$ costituisce una ricevuta non rivelante.
     \item Al fine di mitigare la coercizione retroattiva, l'applicazione client esegue la cancellazione immediata e irrecuperabile della chiave privata effimera $PR_v$ e del fattore di randomizzazione $r$ non appena validata la ricevuta. Privandosi di tale materiale crittografico, l'elettore perde la capacità di dimostrare a posteriori sia la paternità della firma $\sigma$ posta sul pacchetto, sia il contenuto della preferenza cifrata.
 \end{itemize}
 Queste contromisure realizzano la proprietà di Assenza di Ricevuta \textbf{[SEC-3]} a livello di protocollo applicativo, escludendo la possibilità che l'infrastruttura stessa fornisca strumenti validi per il commercio dei suffragi.

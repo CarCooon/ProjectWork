@@ -298,9 +298,10 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
             (\xAE-0.22,-22.5) --
             (\xE+0.22,-22.5);
             
-        \node[mlbl, above] at ({(\xE+0.22+\xAE-0.22)/2},-22.5) {
-            $R = \mathrm{Sign}_{PR_{AE}}\!\bigl(H(K_j \mathbin{\|}
-                F_j \mathbin{\|} j \mathbin{\|} id_{\text{elezione}})\bigr)$
+        \node[mlbl, above, xshift=-1.8cm] at ({(\xE+0.22+\xAE-0.22)/2},-22.5) {%
+            $R = \bigl(K_j,\;F_j,\;j,\;id_{\text{elezione}},\;
+            \mathrm{Sign}_{PR_{AE}}\!\bigl(H(K_j \mathbin{\|}
+            F_j \mathbin{\|} j \mathbin{\|} id_{\text{elezione}})\bigr)\bigr)$
         };
             
         % Elettore: cancellazione locale dopo verifica di R
@@ -442,6 +443,7 @@ La firma $\sigma$ copre l'hash del ciphertext $C$ (non il voto in chiaro $i$) e 
 
 L'Autorità Elettorale riceve via TLS il pacchetto $M = (C, C_p, \eta, id_{elezione}, \sigma)$ ed esegue una validazione crittografica e procedurale prima di accettare il voto. I controlli avvengono in modo strettamente sequenziale:
 \begin{enumerate}
+    \item \textbf{Finestra temporale:} verifica che $t_{apertura} \le \text{now} \le t_{chiusura}$, rigettando immediatamente qualsiasi pacchetto ricevuto fuori dalla finestra di voto attiva.
     \item \textbf{Autorizzazione:} valida la firma del SA su $C_p$, accertando che l'utente sia un avente diritto abilitato.
     \item \textbf{Unicità:} verifica che $PU_v$ non sia già presente nel \texttt{Registro\_Effimeri\_AE}, impedendo un secondo voto con lo stesso certificato.
     \item \textbf{Anti-replay:} verifica che il nonce $\eta$ non sia già nel \texttt{Registro\_Nonce\_AE}.
