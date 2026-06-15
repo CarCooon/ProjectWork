@@ -37,7 +37,7 @@ $H(\cdot)$ & Funzione hash (SHA-256). & Primitiva utilizzata per \textit{commitm
 $K_j = H(C_j)$ & \textit{Commitment} pubblico. & Traccia del ciphertext $C_j$ inserita nell'urna (impegna l'AE senza esporre il ciphertext). \\ \hline
 $F_j = H(K_j \parallel \eta_j)$ & \textit{Fingerprint} (impronta). & Impronta indicizzata nel Merkle Tree dell'urna per abilitare la verifica individuale. \\ \hline
 $\sigma$ & Firma sul pacchetto. & Apposta dall'elettore con $PR_v$ per garantire l'integrità del pacchetto e la paternità effimera. \\ \hline
-$R$ & Ricevuta crittografica. & Rilasciata dall'AE e firmata con $PR_{AE}$ per attestare ricezione e accettazione del pacchetto. \\ \hline
+$R$ & Ricevuta crittografica. & Tupla $(K_j, F_j, j, id_{elezione}, \text{Sign}_{PR_{AE}}(\cdot))$ rilasciata dall'AE per attestare ricezione, fornire l'indice $j$ e i valori necessari alla verifica individuale. \\ \hline
 \end{tabular}
 \caption{Legenda dei parametri e della notazione crittografica del protocollo.}
 \label{tab:parametri_notazione}
@@ -266,27 +266,28 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
 
         % Attivazione AE: controlli
         \draw[actbox]
-            (\xAE-0.22,-15.7) rectangle
-            (\xAE+0.22,-22);
+            (\xAE-0.22,-15.6) rectangle
+            (\xAE+0.22,-22.1);
 
         \draw[gray!45, thin]
-            (\xAE-0.22,-17.8) --
-            (\xAE-0.6,-17.8);
+            (\xAE-0.22,-17.7) --
+            (\xAE-0.7,-17.7);
 
-        \node[abox, anchor=east, minimum width=6.2cm] at (\xAE-0.7,-17.8) {%
+        \node[abox, anchor=east, minimum width=6.2cm] at (\xAE-0.7,-17.65) {%
             \textbf{Controlli sequenziali (esito binario):}\\[5pt]
-            (1)~Autorizzazione:\;verifica $\mathrm{Sign}_{PR_{SA}}$ su $C_p$\\[3pt]
-            (2)~Unicità:\;$PU_v \notin \texttt{Registro\_Effimeri\_AE}$\\[3pt]
-            (3)~Anti-replay:\;$\eta \notin \texttt{Registro\_Nonce\_AE}$\\[3pt]
-            (4)~Integrità:\;verifica $\sigma$ con $PU_v$
+            (1)~Finestra:\;$t_{ap} \le \mathit{now} \le t_{ch}$\\[3pt]
+            (2)~Autorizzazione:\;verifica $\mathrm{Sign}_{PR_{SA}}$ su $C_p$\\[3pt]
+            (3)~Unicità:\;$PU_v \notin \texttt{Registro\_Effimeri\_AE}$\\[3pt]
+            (4)~Anti-replay:\;$\eta \notin \texttt{Registro\_Nonce\_AE}$\\[3pt]
+            (5)~Integrità:\;verifica $\sigma$ con $PU_v$
         };
 
         % Calcolo di j, K_j e F_j
         \draw[gray!45, thin]
-            (\xAE-0.22,-20.6) --
-            (\xAE-0.6,-20.6);
+            (\xAE-0.22,-20.9) --
+            (\xAE-0.7,-20.9);
 
-        \node[sbox, anchor=east, minimum width=4.7cm] at (\xAE-0.7,-20.6) {%
+        \node[sbox, anchor=east, minimum width=4.7cm] at (\xAE-0.7,-20.85) {%
             assegna indice progressivo $j$\\[5pt]
             $K_j = H(C_j)$\quad[\textit{commitment}]\\[5pt]
             $F_j = H(K_j \mathbin{\|} \eta_j)$\quad[\textit{fingerprint}]
@@ -456,9 +457,10 @@ Se il pacchetto supera positivamente tutti i controlli, l'AE procede alla sua ac
 L'autorità calcola quindi due valori fondamentali:
 $$K_j = H(C_j) \quad \text{(Commitment pubblico)}$$
 $$F_j = H(K_j \parallel \eta_j) \quad \text{(Fingerprint)}$$
-Per concludere la transazione, l'AE genera la ricevuta crittografica $R$ firmando digitalmente i parametri essenziali dell'operazione:
-$$R = \text{Sign}_{PR_{AE}}(H(K_j \parallel F_j \parallel j \parallel id_{elezione}))$$
-La ricevuta $R$ viene immediatamente inviata all'elettore attraverso il canale TLS ancora aperto, a testimonianza dell'avvenuta ricezione e validazione.
+Per concludere la transazione, l'AE genera la ricevuta crittografica $R$ come tupla firmata contenente i parametri essenziali dell'operazione:
+$$R = \bigl(K_j,\; F_j,\; j,\; id_{elezione},\;
+    \text{Sign}_{PR_{AE}}\!\bigl(H(K_j \parallel F_j \parallel j \parallel id_{elezione})\bigr)\bigr)$$
+La tupla espone in chiaro $K_j$, $F_j$ e l'indice $j$ (necessari alla verifica individuale), autenticati dalla firma dell'AE. La ricevuta $R$ viene immediatamente inviata all'elettore attraverso il canale TLS ancora aperto, a testimonianza dell'avvenuta ricezione e validazione.
 
 \subsubsection{Separazione tra archivio interno e urna pubblica}
 \label{subsubsec:wp2_archivio_vs_urna}
@@ -756,7 +758,7 @@ Parallelamente alla hash chain, l'AE costruisce un Merkle Tree le cui foglie son
 
 La struttura ad albero serve a separare l'onere di verifica in base al soggetto. Un revisore che valida l'intera elezione deve comunque scaricare la hash chain e ricostruire l'albero con una scansione lineare ($O(n)$); il singolo elettore che vuole solo accertare l'inclusione della propria scheda, invece, richiede all'AE la relativa prova di inclusione e ricalcola il percorso fino alla radice in tempo logaritmico ($O(\log n)$), senza scaricare l'intero registro (dettagli nella Sezione~\ref{subsec:wp2_verifica_individuale}).
 
-Ogni Merkle Root pubblicata, intermedia o definitiva, viene inoltre controfirmata dal SA, che ne conserva una copia con il proprio timestamp. Il SA firma solo il valore della radice (un hash) e non ha quindi accesso al contenuto delle schede.
+Ogni Merkle Root pubblicata, intermedia o definitiva, viene inoltre controfirmata dal SA, che ne conserva una copia con il proprio timestamp. Il SA legge autonomamente la Root dall'urna pubblica, accessibile a chiunque, e vi appone la propria firma $\text{Sign}_{PR_{SA}}(\text{Root})$, attestando la coerenza tra il numero di certificati $C_p$ emessi e i record visibili nell'urna. Il SA firma solo il valore della radice (un hash) e non ha accesso al contenuto delle schede né all'archivio privato dell'AE.
 
 \subsection{Scelta progettuale: architettura centralizzata vs blockchain}
 \label{subsec:wp2_centralizzata_vs_blockchain}
@@ -770,7 +772,7 @@ L'urna adotta primitive tipiche dei registri distribuiti (hash chain e Merkle Tr
 \end{itemize}
 Una blockchain resterebbe una direzione valida solo in scenari puramente \textit{trustless}, dove andrebbe affiancata a meccanismi di decifratura distribuita per frammentare anche lo scrutinio. Per gli obiettivi del progetto, l'architettura verificabile ma gestita centralmente è la scelta più adeguata.
 
-\clearpage
+
 \section{Chiusura delle urne, scrutinio e pubblicazione}
 \label{sec:scrutinio_pubblicazione}
 

@@ -31,7 +31,9 @@ Il compromesso fondamentale adottato in questa scelta progettuale risiede quindi
 \section{Funzionamento del sistema}
 \label{sec:1.2_funzionamento_sistema}
 
-La funzionalità primaria del protocollo consiste nella gestione di un'elezione elettronica sicura all'interno di un ambiente remoto e non fisicamente controllato, garantendo che l'intero processo sia trasparente, verificabile e protetto da manipolazioni sistemiche. Al fine di delineare in modo dettagliato e non ambiguo il perimetro logico del sistema, il funzionamento del protocollo viene modellato attraverso un flusso sequenziale suddiviso in tre macro-fasi funzionali e cronologiche, propedeutiche l'una all'altra:
+La funzionalità primaria del protocollo consiste nella gestione di un'elezione elettronica sicura all'interno di un ambiente remoto e non fisicamente controllato, garantendo che l'intero processo sia trasparente, verificabile e protetto da manipolazioni sistemiche. Al fine di delineare in modo dettagliato e non ambiguo il perimetro logico del sistema, il funzionamento del protocollo viene modellato attraverso un flusso sequenziale suddiviso in tre macro-fasi funzionali e cronologiche, propedeutiche l'una all'altra.
+
+\noindent\textbf{Vincolo di Efficienza.} Sin da questa fase di modellazione si stabilisce che l'efficienza è un requisito progettuale irrinunciabile: il protocollo deve poter essere eseguito su un dispositivo comune con latenza contenuta e senza richiedere risorse computazionali eccessive.
 
 \begin{enumerate}
     \item \textbf{Fase di Registrazione e Autenticazione:} In questa fase iniziale, il sistema ha il compito di verificare l'eleggibilità dell'utente che richiede di accedere alla votazione. Il perimetro funzionale impone l'accertamento che l'utente sia legittimamente incluso nelle liste degli aventi diritto e che non abbia ancora speso il proprio diritto di voto. L'output logico di questa fase è l'emissione di un'autorizzazione formale che abiliti l'utente alle fasi successive, garantendo tassativamente che tale autorizzazione non contenga elementi idonei a svelare l'identità reale del richiedente.
@@ -488,7 +490,7 @@ Questa categoria rappresenta il fondamento della trasparenza del sistema. Poich�
     Falsario           & & $\bullet$ & & & & & & & & & & \\
     Elettore Disonesto & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & & & $\bullet$ & & $\bullet$ & & & \\
     Coercitore         & & & & & & & $\triangle$ & & & & & \\
-    SA Disonesto       & & & & & & $\bullet$ & & & & & & \\
+    SA Disonesto       & $\triangle$ & & & & & $\bullet$ & & & & & & \\
     AE Disonesta       & & & & & $\bullet$ & & & & & $\triangle$ & $\bullet$ & $\bullet$ \\
     \hline
     \end{tabular}
