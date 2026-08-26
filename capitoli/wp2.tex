@@ -31,7 +31,6 @@ $C_p$ & Certificato pseudonimo. & Emesso dal SA, attesta l'abilitazione al voto 
 $i$ & Preferenza di voto. & Valore in chiaro scelto dall'elettore e codificato come intero scalare. \\ \hline
 $r$ & Fattore di randomizzazione. & Generato dall'elettore per lo schema RSA-OAEP, assicura l'indistinguibilità del ciphertext. \\ \hline
 $\eta$ & Nonce a 256 bit. & Generato dall'elettore tramite CSPRNG e inserito nel pacchetto $M$ per l'anti-replay e il fingerprinting. \\ \hline
-$t_{finestra}$ & Finestra temporale. & Identificatore a bassa risoluzione temporale inserito in $C_p$ per mitigare l'analisi del traffico. \\ \hline
 $t_{apertura}, t_{chiusura}$ & Timestamp ufficiali. & Definiscono i limiti temporali di validità per l'accettazione delle schede. \\ \hline
 $H(\cdot)$ & Funzione hash (SHA-256). & Primitiva utilizzata per \textit{commitment}, \textit{fingerprint} e firme digitali. \\ \hline
 $K_j = H(C_j)$ & \textit{Commitment} pubblico. & Traccia del ciphertext $C_j$ inserita nell'urna (impegna l'AE senza esporre il ciphertext). \\ \hline
@@ -43,7 +42,9 @@ $R$ & Ricevuta crittografica. & Tupla $(K_j, F_j, j, id_{elezione}, \text{Sign}_
 \label{tab:parametri_notazione}
 \end{table}
 
-\textbf{Nota sulle firme digitali.} Per aderire correttamente ai requisiti di sicurezza ed evitare le vulnerabilità delle firme RSA applicate direttamente al messaggio, si specifica che le firme digitali del protocollo (come $\sigma$ ed $R$) sono implementate secondo lo schema \textbf{hash-and-sign}. I dati oggetto della firma vengono preventivamente compressi tramite la funzione hash crittografica $H(\cdot)$ (SHA-256), e solo il digest risultante viene firmato tramite la chiave privata RSA. In nessuna fase dell'infrastruttura viene impiegata la firma RSA \textit{textbook} applicata direttamente al dato in chiaro.
+\textbf{Nota sulle firme digitali.} Per aderire correttamente ai requisiti di sicurezza ed evitare le vulnerabilità delle firme RSA applicate direttamente al messaggio, si specifica che le firme digitali del protocollo (come $\sigma$ ed $R$) sono implementate secondo lo schema \textbf{hash-and-sign}. I dati oggetto della firma vengono preventivamente compressi tramite la funzione hash crittografica $H(\cdot)$ (SHA-256), e solo il digest risultante viene firmato tramite la chiave privata RSA. In nessuna fase dell'infrastruttura viene impiegata la firma RSA \textit{textbook} applicata direttamente al dato in chiaro. In tutte le strutture firmate, i campi concatenati prima dell'hash sono codificati in modo univoco (lunghezza fissa o esplicitamente delimitata): per i campi a lunghezza variabile, come \texttt{lista\_candidati} in $Params$ o $Risultato$ in $Doc_{finale}$, questo evita che tuple di campi diverse producano la stessa serializzazione e dunque lo stesso digest firmato.
+
+In ogni struttura firmata del protocollo --- $M$, $R$, $Record_j$, $Invalid_j$, $Doc_{finale}$ --- il digest coperto dalla firma include tutti i campi della tupla tranne la firma stessa: nessun campo mutabile resta fuori dal perimetro firmato. La chiave effimera $PR_v$ firma due strutture distinte nel corso del protocollo (il \textit{nonce} di proof-of-possession in Fase~1 e il pacchetto $M$ in Fase~2): non vi è rischio di confusione tra le due firme, perché al momento della sfida di Fase~1 $C_p$ non è stato ancora emesso, e costruire un \textit{nonce} che collida con $H(C \parallel C_p \parallel \eta \parallel id_{elezione})$ è computazionalmente infattibile.
 
 \section{Requisito TLS e limiti rispetto alla traffic analysis}
 \label{sec:wp2_tls}
@@ -52,12 +53,7 @@ Tutte le comunicazioni tra l'Elettore e le componenti server (SA e AE) avvengono
 
 TLS è un requisito strutturale, non un dettaglio implementativo. Il protocollo applicativo prevede che l'elettore firmi il pacchetto di voto $M$ per garantirne l'integrità, ma tale firma non offre confidenzialità: senza la cifratura del canale, i campi del pacchetto ($C_p$, $\eta$, $\sigma$) viaggerebbero in chiaro. Un avversario di rete passivo potrebbe allora estrarre il ciphertext $C$ e il nonce $\eta$, calcolare il commitment $K = H(C)$ e il fingerprint $F_j = H(K \parallel \eta)$, cercare $F_j$ nell'urna pubblica e associare il record all'indirizzo IP del mittente, violando la segretezza.
 
-Le garanzie di TLS non vanno però sovrastimate: il canale protegge il payload ma non neutralizza l'analisi del traffico. Un avversario in ascolto può ancora raccogliere indirizzi IP, dimensioni dei pacchetti e, soprattutto, il \textit{timing} delle connessioni. Correlando l'istante in cui un elettore si autentica presso il SA con l'istante in cui l'AE riceve una scheda, potrebbe ricostruire il legame tra identità e voto. Per mitigare questa correlazione a livello applicativo il protocollo adotta due strategie complementari:
-\begin{enumerate}
-    \item \textbf{Timestamp a bassa risoluzione:} il certificato $C_p$ non contiene l'istante esatto di emissione, ma un $t_{finestra}$ che indica un intervallo orario, riducendo la precisione temporale a disposizione dell'AE.
-    \item \textbf{Pubblicazione per finestre:} l'AE registra internamente la scheda al momento della validazione --- necessario per emettere subito la ricevuta $R$ con indice $j$ coerente --- ma differisce la pubblicazione del record nell'urna fino alla finestra prevista, per blocchi aggregati anziché in tempo reale.
-\end{enumerate}
-Queste scelte spezzano la correlazione temporale delle operazioni, ridimensionando il rischio di de-anonimizzazione basato sul traffico.
+Le garanzie di TLS non vanno però sovrastimate: il canale protegge il payload ma non neutralizza l'analisi del traffico. Un avversario in ascolto può ancora raccogliere indirizzi IP, dimensioni dei pacchetti e, soprattutto, il \textit{timing} delle connessioni. Correlando l'istante in cui un elettore si autentica presso il SA con l'istante in cui l'AE riceve una scheda, potrebbe ricostruire il legame tra identità e voto. Per mitigare questa correlazione a livello applicativo il protocollo adotta la \textbf{pubblicazione per finestre}: l'AE registra internamente la scheda al momento della validazione --- necessario per emettere subito la ricevuta $R$ con indice $j$ coerente --- ma differisce la pubblicazione del record nell'urna fino alla finestra prevista, per blocchi aggregati anziché in tempo reale. Questa scelta spezza la correlazione temporale diretta tra l'istante di autenticazione presso il SA e l'istante di apparizione pubblica del voto, ridimensionando il rischio di de-anonimizzazione basato sul traffico.
 
 \section{Registrazione e autenticazione degli elettori}
 \label{sec:autenticazione_elettori}
@@ -70,7 +66,7 @@ Il protocollo realizza l'autenticazione degli elettori secondo il modello di \te
 
 \paragraph{Autenticazione a più fattori.} Trattandosi di un'operazione ad alto valore, l'accesso al voto richiede l'autenticazione a più fattori (MFA) offerta dall'IdP, preferibilmente con un autenticatore FIDO2/WebAuthn resistente al \textit{phishing}. La misura neutralizza gli attacchi tipici contro le credenziali (\textit{password spraying}, \textit{credential stuffing}, furto di credenziali), rafforzando le proprietà [AUTH-1] e [AUTH-2]. Agendo esclusivamente sul lato SA, che conosce comunque l'identità reale dell'elettore, l'MFA non incide in alcun modo sullo pseudo-anonimato [SEC-2].
 
-\paragraph{Prova di possesso della chiave effimera.} L'emissione di $C_p$ è subordinata a una verifica di \textit{proof-of-possession} secondo il paradigma \textit{challenge-response}: il SA invia un \textit{nonce} casuale, l'elettore lo firma con $PR_v$ e il SA ne valida la firma con $PU_v$ prima di rilasciare il certificato. Replicando la \textit{registration ceremony} di FIDO2, il meccanismo impedisce la certificazione di una chiave pubblica di cui il richiedente non detenga la corrispondente chiave privata, completando la proprietà [AUTH-2].
+\paragraph{Prova di possesso della chiave effimera.} L'emissione di $C_p$ è subordinata a una verifica di \textit{proof-of-possession} secondo il paradigma \textit{challenge-response}: il SA invia un \textit{nonce} casuale, l'elettore lo firma con $PR_v$ (secondo lo schema hash-and-sign, $\mathrm{Sign}_{PR_v}(H(\mathit{nonce}))$) e il SA ne valida la firma con $PU_v$ prima di rilasciare il certificato. Il controllo è strutturalmente necessario, non solo prudenziale: il SA impone l'unicità per \textit{identità} (un solo $C_p$ per elettore), mentre l'AE impone l'unicità per $PU_v$ (Sezione~\ref{subsubsec:wp2_controlli_ae}) --- due chiavi di controllo distinte. L'unicità imposta dall'AE funge da proxy per il vincolo ``un elettore, un voto'' solo se la corrispondenza tra $PU_v$ e identità è biunivoca; senza prova di possesso, due identità distinte potrebbero ottenere certificati che dichiarano la stessa $PU_v$ (il SA non verifica l'unicità di $PU_v$, solo quella dell'identità), rendendo l'unicità imposta dall'AE non più equivalente a quella imposta sull'elettore. La prova di possesso chiude questo scarto, completando la proprietà [AUTH-2].
 
 \noindent\textbf{Proprietà realizzate:} [AUTH-1], [AUTH-2].
 
@@ -210,7 +206,7 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
             (\xSA-0.22,-6.4);
 
         \node[mlbl, above] at ({(\xE+0.22+\xSA-0.22)/2},-6.4) {
-            $\mathrm{Sign}_{PR_v}(\mathit{nonce})$
+            $\mathrm{Sign}_{PR_v}(H(\mathit{nonce}))$
         };
 
         % SA -> Elettore: certificato pseudonimo
@@ -219,9 +215,9 @@ La Figura \ref{fig:diagramma_sequenza} illustra le interazioni crittografiche tr
             (\xE+0.22,-8.2);
 
         \node[mlbl, above, align=center] at ({(\xE+0.22+\xSA-0.22)/2},-8.2) {%
-            $C_p = \bigl\{PU_v,\;\;id_{\text{elezione}},\;\;t_{\text{finestra}},$\\[1pt]
+            $C_p = \bigl\{PU_v,\;\;id_{\text{elezione}},$\\[1pt]
             $\quad\mathrm{Sign}_{PR_{SA}}\!\bigl(H(PU_v \mathbin{\|}
-                id_{\text{elezione}} \mathbin{\|} t_{\text{finestra}})\bigr)\bigr\}$
+                id_{\text{elezione}})\bigr)\bigr\}$
         };
 
         %==============================================================
@@ -353,7 +349,7 @@ L'AE genera due coppie di chiavi RSA distinte e indipendenti:
     \item $(PU_{ele}, PR_{ele})$: coppia dedicata esclusivamente alla cifratura delle schede da parte degli elettori e alla successiva decifratura da parte dell'AE.
     \item $(PU_{AE}, PR_{AE})$: coppia dedicata esclusivamente all'apposizione delle firme digitali sui record dell'urna, sulle ricevute e sul documento di scrutinio finale.
 \end{itemize}
-L'isolamento di questi due domini operativi risponde rigorosamente al principio del minimo privilegio (\textit{least privilege}). In questo modo, l'eventuale compromissione della chiave di firma $PR_{AE}$ non implica in alcun modo la compromissione di $PR_{ele}$. Quest'ultima rimane in possesso esclusivo dell'AE ed è custodita \textit{offline}, su un modulo hardware sicuro o un supporto isolato dalla rete; viene resa disponibile alla macchina di scrutinio soltanto a partire dalla chiusura delle urne ($t_{chiusura}$). Durante l'intera fase di raccolta, dunque, la chiave di decifratura non è presente sul server che riceve le schede.
+L'isolamento di questi due domini operativi limita l'impatto di un'eventuale compromissione a un solo ambito funzionale: la compromissione della chiave di firma $PR_{AE}$ non implica in alcun modo la compromissione di $PR_{ele}$. Quest'ultima rimane in possesso esclusivo dell'AE ed è custodita \textit{offline}, su un modulo hardware sicuro o un supporto isolato dalla rete; viene resa disponibile alla macchina di scrutinio soltanto a partire dalla chiusura delle urne ($t_{chiusura}$). Durante l'intera fase di raccolta, dunque, la chiave di decifratura non è presente sul server che riceve le schede.
 
 Parallelamente, il Sistema di Autenticazione (SA) genera la propria coppia di chiavi RSA $(PU_{SA}, PR_{SA})$, la cui chiave privata verrà impiegata unicamente per firmare digitalmente i certificati pseudonimi rilasciati agli elettori abilitati.
 
@@ -393,10 +389,8 @@ L'applicazione client stabilisce un canale TLS verso il SA, validandone il certi
 \label{subsubsec:wp2_certificato_pseudonimo}
 
 Superati i controlli, il SA emette il certificato pseudonimo:
-$$C_p = \{ PU_v, id_{elezione}, t_{finestra}, Sign_{PR_{SA}}(H(PU_v \parallel id_{elezione} \parallel t_{finestra})) \}$$
-Questo certificato agisce come \textit{token} di abilitazione: attesta crittograficamente che la chiave pubblica effimera $PU_v$ appartiene a un elettore avente diritto per la votazione indicata, \textbf{senza includere in alcun campo l'identità reale dell'elettore}. Terminato il rilascio, il SA aggiorna il proprio registro interno (che non verrà mai condiviso con l'AE) e interrompe la comunicazione. 
-
-Il parametro $t_{finestra}$, a bassa risoluzione temporale, concorre con la pubblicazione per finestre a mitigare la correlazione tra autenticazione e invio della scheda.
+$$C_p = \{ PU_v, id_{elezione}, Sign_{PR_{SA}}(H(PU_v \parallel id_{elezione})) \}$$
+Questo certificato agisce come \textit{token} di abilitazione: attesta crittograficamente che la chiave pubblica effimera $PU_v$ appartiene a un elettore avente diritto per la votazione indicata, \textbf{senza includere in alcun campo l'identità reale dell'elettore}. Terminato il rilascio, il SA aggiorna il proprio registro interno (che non verrà mai condiviso con l'AE) e interrompe la comunicazione.
 
 \textbf{Proprietà realizzate:} [AUTH-1], [AUTH-2], [SEC-2] (condizionale all'Assunzione~1 di WP1: non-collusione SA/AE).
 
@@ -422,7 +416,7 @@ La qualità della generazione è essenziale per la sicurezza del meccanismo di v
 Il nonce $\eta$ riveste un duplice ruolo strutturale all'interno del protocollo:
 \begin{enumerate}
     \item \textbf{Valore non pubblico per la verifica individuale:} dal commitment $K = H(C)$ si deriva il fingerprint $F = H(K \parallel \eta)$. Il nonce $\eta$ è generato dall'elettore e trasmesso all'AE tramite TLS: è quindi condiviso tra elettore e AE, ma non viene pubblicato nell'urna e non è osservabile da terzi. Un osservatore esterno non può quindi ricalcolare il fingerprint e collegare una scheda pubblicata all'elettore; un $\eta$ prevedibile vanificherebbe questa protezione, da cui l'uso del CSPRNG.
-    \item \textbf{Parametro anti-replay:} l'unicità del voto è già garantita dal controllo su $PU_v$; $\eta$ aggiunge, per scelta di difesa in profondità, un secondo livello anti-replay verificabile in modo indipendente.
+    \item \textbf{Controllo di coerenza aggiuntivo:} l'unicità del voto è già garantita dal controllo su $PU_v$, che da solo impedisce un secondo voto valido con lo stesso certificato; poiché $\eta$ deve comunque essere tracciato dall'AE per il calcolo di $F_j$, verificarne anche l'unicità nel \texttt{Registro\_Nonce\_AE} costa poco e aggiunge un controllo di coerenza (ad esempio contro una collisione dovuta a un generatore casuale lato client difettoso), senza introdurre un secondo livello di sicurezza realmente indipendente dal primo.
 \end{enumerate}
 
 \subsubsection{Pacchetto di voto ed Encrypt-then-Sign}
@@ -432,6 +426,8 @@ L'impacchettamento segue il paradigma \textit{Encrypt-then-Sign}: l'elettore cif
 $$\sigma = \text{Sign}_{PR_v}(H(C \parallel C_p \parallel \eta \parallel id_{elezione}))$$
 $$M = (C, C_p, \eta, id_{elezione}, \sigma)$$
 La firma $\sigma$ copre l'hash del ciphertext $C$ (non il voto in chiaro $i$) e include $C_p$ e $id_{elezione}$, legando il pacchetto all'abilitazione e alla specifica consultazione. Ogni manipolazione in transito è così rilevabile: un \textit{Man-in-the-Middle} che sostituisse $C$ invaliderebbe $\sigma$. I campi $\eta$, $C_p$ e $\sigma$ viaggiano in chiaro dentro $M$ affinché l'AE possa estrarli ed eseguire i controlli; la loro confidenzialità verso osservatori esterni è garantita dal tunnel TLS.
+
+Uno schema che accoppia cifratura e firma è vulnerabile, in generale, a un attacco di sostituzione quando l'identità del mittente non è coperta dalla firma: un attaccante può staccarla insieme alla firma originale e sostituire entrambe con proprie credenziali valide, facendo credere al destinatario che il messaggio provenga da lui. Il pacchetto $M$ è esente da questo problema perché l'identità del mittente -- il certificato $C_p$ -- è inclusa \textit{dentro} il digest firmato da $\sigma$, non appesa a fianco: sostituire $C_p$ senza invalidare $\sigma$ richiederebbe la chiave privata $PR_v$ del mittente originale, che l'attaccante non possiede. Una contromisura complementare, adottabile in schemi analoghi, consisterebbe nel cifrare anche l'identità del mittente insieme al messaggio; qui è deliberatamente esclusa: cifrarla dentro $C$ farebbe sì che l'AE, decifrando in fase di scrutinio, recuperi anche l'identità del votante insieme alla preferenza, violando direttamente [SEC-1] e [SEC-2]. La separazione tra ciò che viene cifrato (il solo voto $i$) e ciò che viene firmato (il ciphertext insieme a $C_p$) è quindi una scelta di design motivata, non un'omissione.
 
 \textbf{Proprietà realizzate:} [INT-1], [UNIQ-2].
 
@@ -454,7 +450,7 @@ La logica di accettazione è binaria: il fallimento di un solo controllo causa i
 \subsubsection{Commitment, fingerprint e ricevuta}
 \label{subsubsec:wp2_commitment_ricevuta}
 
-Se il pacchetto supera positivamente tutti i controlli, l'AE procede alla sua accettazione. Al pacchetto viene assegnato un indice identificativo progressivo $j$ in ordine cronologico di accettazione. L'indice $j$ è fissato in questo momento, viene incluso nella ricevuta $R$ emessa all'elettore e rimane invariato anche se la pubblicazione del record nell'urna pubblica viene differita alla finestra temporale successiva.
+Se il pacchetto supera positivamente tutti i controlli, l'AE procede alla sua accettazione, registrando $PU_v$ nel \texttt{Registro\_Effimeri\_AE} e $\eta$ nel \texttt{Registro\_Nonce\_AE}: l'iscrizione nei due registri avviene solo in caso di accettazione, non al primo tentativo, cosicché un pacchetto respinto non consumi lo slot di un altro elettore. Al pacchetto viene assegnato un indice identificativo progressivo $j$ in ordine cronologico di accettazione. L'indice $j$ è fissato in questo momento, viene incluso nella ricevuta $R$ emessa all'elettore e rimane invariato anche se la pubblicazione del record nell'urna pubblica viene differita alla finestra temporale successiva.
 
 L'autorità calcola quindi due valori fondamentali:
 $$K_j = H(C_j) \quad \text{(Commitment pubblico)}$$
@@ -744,9 +740,9 @@ Se un attaccante --- o la stessa AE corrotta --- alterasse un commitment, rimuov
 \subsubsection{Ruolo del commitment pubblico \texorpdfstring{$K_j$}{K\_j}}
 \label{subsubsec:wp2_ruolo_kj}
 
-Il valore $K_j = H(C_j)$ è un \textit{commitment} crittografico con due proprietà. Per \textit{hiding}, grazie all'unidirezionalità dell'hash, non rivela $C_j$ né la preferenza. Per \textit{binding}, vincola l'AE al ciphertext ricevuto in Fase~3: ogni alterazione successiva di $C_j$ nell'archivio privato produrrebbe un hash diverso, rompendo il legame con il $K_j$ pubblicato. Su questo binding si fonda l'audit a posteriori descritto nella Sezione~\ref{subsec:wp2_verifica_universale}.
+Il valore $K_j = H(C_j)$ è un \textit{commitment} crittografico con due proprietà. Per \textit{hiding}, l'unidirezionalità di $H$ impedisce di risalire a $C_j$ a partire da $K_j$; ma questo da solo non basterebbe se il valore hashato avesse poche alternative possibili, come la preferenza $i$ (solo $N$ valori): un osservatore potrebbe enumerare $H(\text{RSA-OAEP-Enc}(PU_{ele}, k))$ per ogni $k \in \{1, \dots, N\}$ e confrontare il risultato con $K_j$, esattamente come si enumera un dizionario ristretto contro un hash non salato. È perché si hasha $C_j$ e non $i$ direttamente che l'hiding regge: la randomizzazione $r$ introdotta da RSA-OAEP rende $C_j$ un valore ad alta entropia, svolgendo lo stesso ruolo che un \textit{salt} svolgerebbe in quel confronto. Per \textit{binding}, vincola l'AE al ciphertext ricevuto in Fase~3: ogni alterazione successiva di $C_j$ nell'archivio privato produrrebbe un hash diverso, rompendo il legame con il $K_j$ pubblicato.
 
-Va però precisato un limite: $K_j$ non risolve la Verificabilità Universale [VER-2]. Un osservatore esterno, non avendo accesso a $C_j$ né a $r$, non può validare autonomamente la corrispondenza tra voti espressi e risultato dello scrutinio. Il commitment agisce da rafforzamento strutturale, rendendo rilevabile l'alterazione dei voti archiviati solo in presenza di un audit.
+Va però precisato un limite: $K_j$ non risolve la Verificabilità Universale [VER-2]. Un osservatore esterno, non avendo accesso a $C_j$ né a $r$, non può validare autonomamente la corrispondenza tra voti espressi e risultato dello scrutinio. Il commitment resta quindi un vincolo strutturale sull'operato dell'AE, non una garanzia verificabile dall'esterno.
 
 \subsection{Pubblicazione per finestre}
 \label{subsec:wp2_pubblicazione_finestre}
@@ -758,9 +754,9 @@ Come anticipato nella Sezione~\ref{sec:wp2_tls}, l'AE distingue la registrazione
 
 Parallelamente alla hash chain, l'AE costruisce un Merkle Tree le cui foglie sono i fingerprint $F_j$ delle schede accettate. Al termine di ogni finestra l'AE calcola la nuova radice (\textit{Merkle Root}), la firma e la pubblica; alla chiusura ($t_{chiusura}$) pubblica la Merkle Root definitiva, che impegna crittograficamente l'insieme dei voti registrati.
 
-La struttura ad albero serve a separare l'onere di verifica in base al soggetto. Un revisore che valida l'intera elezione deve comunque scaricare la hash chain e ricostruire l'albero con una scansione lineare ($O(n)$); il singolo elettore che vuole solo accertare l'inclusione della propria scheda, invece, richiede all'AE la relativa prova di inclusione e ricalcola il percorso fino alla radice in tempo logaritmico ($O(\log n)$), senza scaricare l'intero registro (dettagli nella Sezione~\ref{subsec:wp2_verifica_individuale}).
+La struttura ad albero serve a separare l'onere di verifica in base al soggetto. Chi valida l'intera elezione deve comunque scaricare la hash chain e ricostruire l'albero con una scansione lineare ($O(n)$); il singolo elettore che vuole solo accertare l'inclusione della propria scheda, invece, richiede all'AE la relativa prova di inclusione e ricalcola il percorso fino alla radice in tempo logaritmico ($O(\log n)$), senza scaricare l'intero registro (dettagli nella Sezione~\ref{subsec:wp2_verifica_individuale}).
 
-Ogni Merkle Root pubblicata, intermedia o definitiva, viene inoltre controfirmata dal SA, che ne conserva una copia con il proprio timestamp. Il SA legge autonomamente la Root dall'urna pubblica, accessibile a chiunque, e vi appone la propria firma $\text{Sign}_{PR_{SA}}(\text{Root})$, attestando la coerenza tra il numero di certificati $C_p$ emessi e i record visibili nell'urna. Il SA firma solo il valore della radice (un hash) e non ha accesso al contenuto delle schede né all'archivio privato dell'AE.
+Ogni Merkle Root pubblicata, intermedia o definitiva, viene inoltre controfirmata dal SA, che ne conserva una copia con il proprio timestamp. Il SA legge autonomamente la Root dall'urna pubblica, accessibile a chiunque, e vi appone la propria firma $\text{Sign}_{PR_{SA}}(\text{Root})$, impegnandosi pubblicamente su quel preciso valore: da questo momento l'AE non può più presentare a elettori diversi due versioni divergenti della cronologia dell'urna senza la complicità del SA. Il SA firma solo il valore della radice (un hash) e non ha accesso al contenuto delle schede né all'archivio privato dell'AE.
 
 \subsection{Scelta progettuale: architettura centralizzata vs blockchain}
 \label{subsec:wp2_centralizzata_vs_blockchain}
@@ -781,7 +777,14 @@ Una blockchain resterebbe una direzione valida solo in scenari puramente \textit
 \subsection{Chiusura e congelamento dell'urna}
 \label{subsec:wp2_chiusura}
 
-Allo scoccare di $t_{chiusura}$ il sistema interrompe l'accettazione di nuovi pacchetti: ogni sottomissione successiva viene respinta. L'AE pubblica quindi un record di chiusura in coda alla hash chain, contenente il numero totale di schede ricevute ($k_{totale}$) e la Merkle Root finale. La firma $\text{Sign}_{PR_{AE}}$ su questo record consolida lo stato dell'urna e rende rilevabile ogni inserimento successivo.
+Allo scoccare di $t_{chiusura}$ il sistema interrompe l'accettazione di nuovi pacchetti: ogni sottomissione successiva viene respinta. L'AE pubblica quindi un record di chiusura in coda alla hash chain:
+\begin{equation*}
+\begin{split}
+Record_{\text{chiusura}} = \{ & k_{totale},\ \text{MerkleRoot}_{finale},\ H(Record_n),\ \\
+& \text{Sign}_{PR_{AE}}\bigl(H(k_{totale} \parallel \text{MerkleRoot}_{finale} \parallel H(Record_n))\bigr) \}
+\end{split}
+\end{equation*}
+dove $n$ è l'indice dell'ultima scheda accettata. La firma consolida lo stato dell'urna e rende rilevabile ogni inserimento successivo, secondo lo stesso meccanismo di hash pointer e firma già impiegato per $Record_j$.
 
 Si osservi che il protocollo non contempla la sostituzione né l'annullamento di un voto già sottomesso, neppure prima della chiusura: tale scelta (modello \textit{one-shot}) e le relative garanzie crittografiche sono trattate nella Sezione~\ref{subsec:wp2_one_shot_irrevocabile}.
 
@@ -793,6 +796,8 @@ $$i_j = \text{RSA-OAEP-Dec}(PR_{ele}, C_j)$$
 Decifrato il voto, l'AE verifica che ricada nell'intervallo consentito ($1 \le i_j \le N$). Una scheda fuori range o malformata non viene rimossa --- ciò corromperebbe la hash chain --- ma etichettata come invalida con un record firmato, accodato alla catena nella finestra successiva:
 $$Invalid_j = \{ id_{elezione},\ j,\ K_j,\ motivo,\ \text{Sign}_{PR_{AE}}(H(id_{elezione} \parallel j \parallel K_j \parallel motivo)) \}$$
 Il campo $motivo$ è un codice di un insieme predefinito (es. \texttt{DECRYPT\_FAILED}, \texttt{OUT\_OF\_RANGE}, \texttt{MALFORMED\_PADDING}), interpretabile da un verificatore automatico. Riferendosi allo stesso $j$ e $K_j$ della scheda originale, il record consente a chiunque scarichi l'urna di associare l'invalidazione e contare correttamente $k_{invalide}$.
+
+Pubblicare l'esito specifico della decifratura, incluso un codice legato al padding, potrebbe far pensare a un canale sfruttabile come un \textit{oracolo di padding}. Non lo è, per due motivi indipendenti: la decifratura avviene esclusivamente a $t_{chiusura}$, quando la sottomissione di nuove schede è già chiusa, e ciascuna identità dispone di un solo $C_p$ e quindi di una sola scheda sottoposta a scrutinio. Un attaccante non dispone perciò delle molte interrogazioni adattive su cui un attacco di questo tipo si basa: l'esito è osservabile una sola volta per identità, a processo di voto già concluso.
 
 \subsection{Calcolo e pubblicazione del risultato}
 \label{subsec:wp2_calcolo_risultato}
@@ -826,7 +831,7 @@ Il protocollo garantisce quindi una segretezza non \textit{trustless} ma solida,
 \section{Meccanismi di verifica}
 \label{sec:meccanismi_verifica}
 
-I meccanismi descritti in questa sezione concretizzano il ruolo del \textbf{Verificatore Pubblico} definito nel WP1: un attore indipendente e passivo che opera esclusivamente sui dati pubblicati dall'AE. La figura si declina in due modalità complementari: l'\textbf{elettore}, che verifica l'inclusione della propria scheda [VER-1], e l'\textbf{osservatore esterno} (o comitato di controllo), che valida l'integrità dell'intera elezione [VER-2]. Distinto da questa figura è il \textbf{revisore istituzionale} (\textit{auditor}): un ruolo più potente che, a differenza del Verificatore Pubblico, può ottenere accesso temporaneo all'archivio privato dell'AE per controlli non eseguibili sui soli dati pubblici.
+I meccanismi descritti in questa sezione concretizzano il ruolo del \textbf{Verificatore Pubblico} definito nel WP1: un attore indipendente e passivo che opera esclusivamente sui dati pubblicati dall'AE. La figura si declina in due modalità complementari: l'\textbf{elettore}, che verifica l'inclusione della propria scheda [VER-1], e l'\textbf{osservatore esterno} (o comitato di controllo), che valida l'integrità dell'intera elezione [VER-2].
 
 \subsection{Verifica individuale \texttt{[VER-1]}}
 \label{subsec:wp2_verifica_individuale}
@@ -946,7 +951,7 @@ L'elettore può accertare autonomamente che la propria scheda sia stata ricevuta
 
 Cardine della verifica è la ricevuta $R$, che vincola $K_j$, $F_j$, $j$ e $id_{elezione}$ con la firma dell'AE. La ricevuta attesta ricezione e inclusione del pacchetto cifrato ma non espone la preferenza $i_j$ né i parametri per decifrarla: il sistema realizza quindi un'\textbf{assenza di ricevuta rivelante}, che riduce il rischio di coercizione e voto di scambio basati su prove generate dall'architettura, pur non potendo impedire prove esterne costruite dall'elettore (registrazioni dello schermo, software spia).
 
-Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$, autenticata dalla firma dell'AE, per attestare l'avvenuta sottomissione e attivare un audit formale, rendendo rilevabile una manipolazione interna.
+Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$, autenticata dalla firma dell'AE, per contestare formalmente l'omissione, rendendo rilevabile una manipolazione interna.
 
 \clearpage
 \subsection{Verifica universale \texttt{[VER-2]}}
@@ -960,14 +965,13 @@ Qualsiasi osservatore esterno può validare l'integrità globale dell'elezione, 
     \item \textbf{Coerenza numerica:} controlla l'equazione $k_{conformi} + k_{invalide} = k_{totale}$;
     \item \textbf{Autenticità del documento finale:} verifica la firma sul $Doc_{finale}$.
 \end{itemize}
-A integrazione, e a differenza del Verificatore Pubblico che opera sui soli dati pubblici, un revisore istituzionale (\textit{auditor}) a cui sia concesso l'accesso temporaneo all'archivio privato dell'AE può ricalcolare l'hash di ogni scheda cifrata e verificare l'uguaglianza $K_j = H(C_j)$ rispetto ai commitment pubblicati, rendendo rilevabile una sostituzione dei ciphertext prima della decifratura.
 
 \subsection{Dichiarazione del vincolo strutturale \texttt{[VER-2]}}
 \label{subsec:wp2_limite_ver2}
 
 Come per la segretezza, la Verificabilità Universale realizzata è di tipo strutturale: il protocollo garantisce che l'urna sia inalterabile e ispezionabile, ma non offre all'osservatore esterno gli strumenti per accertare che l'AE abbia decifrato e conteggiato onestamente ogni $C_j$. Poiché decifratura e spoglio avvengono in un perimetro black-box gestito con $PR_{ele}$, l'esattezza del risultato si fonda sulla fiducia procedurale nell'autorità. Una verificabilità piena richiederebbe primitive fuori perimetro (Zero-Knowledge Proofs, tally omomorfico verificabile), già richiamate nella Sezione~\ref{subsec:wp2_limite_sec1}.
 
-Il rischio di frode è comunque limitato da due contromisure: la \textbf{verifica individuale}, con cui la ricevuta $R$ consente all'elettore di contestare un'omissione, e l'\textbf{audit procedurale subordinato}, con cui i revisori autorizzati verificano $K_j = H(C_j)$ sull'archivio privato. Quest'ultimo controllo mostra la coerenza tra ciphertext archiviati e commitment pubblicati, pur non costituendo una prova autonoma della correttezza del conteggio.
+Il rischio di frode è mitigato solo in parte dalla \textbf{verifica individuale}, con cui la ricevuta $R$ consente all'elettore di contestare un'omissione della propria scheda. Per la correttezza aggregata dello scrutinio nel suo complesso, il protocollo non introduce meccanismi ulteriori verificabili dall'esterno: il limite descritto in questa sezione resta un vincolo strutturale accettato.
 
 \clearpage
 \section{Riepilogo funzionale delle proprietà di sicurezza}
@@ -999,9 +1003,9 @@ La matrice seguente riepiloga come i requisiti di WP1 siano stati tradotti in me
     \endhead
 
     \textbf{[AUTH-1]} \newline Verifica del diritto di voto
-    & Pieno
+    & Condizionale
     & Il SA autentica l'utente tramite SSO federato d'Ateneo con MFA e rilascia $C_p$ solo agli aventi diritto.
-    & Registro degli aventi diritto corretto e SA affidabile nella fase di autenticazione. \\
+    & Dipende dall'Assunzione~6 del WP1: corretta applicazione dei criteri di eleggibilità da parte del SA. Un SA disonesto può eludere il controllo senza che il solo protocollo crittografico sia in grado di rilevarlo. \\
     \hline
 
     \textbf{[AUTH-2]} \newline Inviolabilità delle Credenziali
@@ -1037,7 +1041,7 @@ La matrice seguente riepiloga come i requisiti di WP1 siano stati tradotti in me
     \textbf{[INT-3]} \newline Immutabilità dell'Urna
     & Condizionale
     & L'urna usa hash chain, hash pointer, firme dell'AE e Merkle Tree. Le modifiche retroattive ai record pubblicati diventano rilevabili.
-    & Corretta pubblicazione dei record e chiave privata $PR_{AE}$ non compromessa. \\
+    & Dipende dall'Assunzione~3 del WP1: correttezza operativa dell'AE nella conservazione dei record; richiede inoltre che $PR_{AE}$ non sia compromessa. \\
     \hline
 
     \textbf{[SEC-1]} \newline Segretezza della Scheda
@@ -1048,7 +1052,7 @@ La matrice seguente riepiloga come i requisiti di WP1 siano stati tradotti in me
 
     \textbf{[SEC-2]} \newline Pseudo-anonimato
     & Condizionale
-    & Il SA conosce l'identità reale; l'AE riceve solo $C_p$ privo di dati identificativi. $t_{finestra}$ e pubblicazione per finestre riducono la correlazione temporale.
+    & Il SA conosce l'identità reale; l'AE riceve solo $C_p$ privo di dati identificativi. La pubblicazione per finestre riduce la correlazione temporale.
     & Dipende dall'Assunzione~1 del WP1: non collusione tra SA e AE. \\
     \hline
 
@@ -1066,7 +1070,7 @@ La matrice seguente riepiloga come i requisiti di WP1 siano stati tradotti in me
 
     \textbf{[VER-2]} \newline Verificabilità Universale
     & Parziale \newline (strutturale)
-    & Il Verificatore Pubblico controlla hash chain, firme AE, Merkle Root e contatori finali. Un revisore istituzionale (\textit{auditor}) verifica $K_j = H(C_j)$ sull'archivio privato.
+    & Il Verificatore Pubblico controlla hash chain, firme AE, Merkle Root e contatori finali, ma non ha accesso all'archivio privato per verificare la corrispondenza con lo scrutinio effettivo.
     & Lo scrutinio resta interno all'AE: non è verificabile matematicamente da chiunque. \\
     \hline
 
