@@ -5,301 +5,430 @@
 \chapter{WP4: Implementazione e Prestazioni}
 \label{ch:wp4}
 
-Questo capitolo descrive la traduzione del protocollo di WP2 in codice eseguibile
-e la misura quantitativa delle sue prestazioni. Ogni attore è un modulo Python,
-ogni struttura di WP2 è una \texttt{dataclass} immutabile con un unico metodo di
-serializzazione per le operazioni crittografiche. Gli artefatti di misura (CSV e
-report testuale) si trovano in \texttt{wp4/artifacts/}; i valori citati nel testo
-sono estratti da \texttt{RISULTATI\_BENCHMARK.txt}.
+% Stile per gli output di terminale e gli alberi di directory: nessuna
+% evidenziazione di sintassi, nessun numero di riga (lo stile di default del
+% documento, "dracula", forza language=Python e numbers=left).
+\lstdefinestyle{consolewp4}{
+    language={},
+    backgroundcolor=\color{white},
+    basicstyle=\ttfamily\scriptsize\color{black!88},
+    keywordstyle=\color{black!88},
+    commentstyle=\color{black!88},
+    stringstyle=\color{black!88},
+    identifierstyle=\color{black!88},
+    numbers=none,
+    frame=single,
+    rulecolor=\color{black!30},
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fixed,
+    tabsize=4,
+    literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1
+}
+
+Questo capitolo descrive la traduzione del protocollo definito nel WP2 in codice eseguibile e la misurazione quantitativa delle sue prestazioni. Il risultato non costituisce un sistema pronto per la produzione, bensì un \textbf{prototipo eseguibile} in grado di riprodurre l'intero flusso elettorale all'interno di un unico processo Python (dal setup all'autenticazione, dalla costruzione della scheda allo scrutinio, fino alle verifiche individuali e universali).
+
+Ogni attore è modellato come un modulo indipendente, e ogni struttura dati del WP2 è implementata come una \texttt{dataclass} immutabile, dotata di un unico metodo di serializzazione canonica per le operazioni crittografiche. Gli artefatti di misurazione (CSV e report testuali) sono archiviati nella directory \texttt{wp4/artifacts/} e i valori citati nel presente capitolo sono estratti fedelmente dal log \texttt{RISULTATI\_BENCHMARK.txt}.
+
+\section{Obiettivi dell'implementazione}
+\label{sec:wp4_obiettivi}
+
+L'implementazione software persegue due obiettivi distinti ma complementari:
+
+\begin{itemize}
+  \item \textbf{Validazione operativa del protocollo:} Il prototipo non introduce nuove proprietà di sicurezza rispetto a quelle già discusse teoricamente nei \emph{Work Package} precedenti, ma serve a dimostrare sul campo che messaggi, firme, cifrature, ricevute e verifiche previste dal WP2 vengano generate e validate senza alcuna incoerenza logica. La traduzione in codice rende finalmente osservabili e testabili la rigida separazione dei ruoli (tra Sistema di Autenticazione e Autorità Elettorale, \S\ref{sec:wp4_non_collusione}) e l'esatta sequenza dei controlli di ricezione (\ref{sec:wp4_flusso}).
+  
+  \item \textbf{Misurazione dei costi computazionali:} Il secondo obiettivo è quantificare il costo computazionale delle singole primitive crittografiche (generazione chiavi RSA, cifratura RSA-OAEP, firma/verifica RSA-PSS, \emph{hashing} SHA-256) e delle strutture portanti del protocollo (costruzione del Merkle Tree, estrazione delle prove di inclusione, validazione della \emph{hash chain}). Tali misurazioni sono condotte sia in isolamento, sia in un'elezione \emph{end-to-end}, fino a includere test di scalabilità su urne sintetiche paragonabili per dimensioni a quelle di un intero Ateneo (\ref{sec:wp4_scalabilita}).
+\end{itemize}
+
+\paragraph{Cosa resta fuori.} 
+È fondamentale sottolineare che il prototipo non è un sistema distribuito. Componenti infrastrutturali come la rete, il canale TLS, l'infrastruttura PKI e l'Identity Provider sono assunti come funzionanti e simulati all'interno del modulo \texttt{sim.py} (\ref{subsec:wp4_simulati}). Allo stesso modo, le limitazioni che WP2 e WP3 hanno già dichiarato come vincoli strutturali ineliminabili (la segretezza della scheda rispetto all'AE, la verificabilità assoluta del conteggio e la non-collusione SA/AE) restano invariate anche nel codice: il WP4 si limita a circoscriverle e a renderle verificabili, senza risolverle crittograficamente.
+
+\section{Scelte implementative}
+\label{sec:wp4_scelte}
+
+\paragraph{Linguaggio e dipendenze.} L'implementazione è stata realizzata in \textbf{Python}, limitando le dipendenze esterne a un'unica libreria fondamentale: \textbf{pyca/cryptography}. L'esecuzione della suite di test per la validazione del sistema è stata affidata al framework \texttt{pytest}. Le primitive crittografiche non sono state implementate menualmente, ma richiamate direttamente dalla libreria. Questa scelta evita l'introduzione di errori implementativi o vulnerabilità nelle operazioni matematiche di base.
+
+\paragraph{Cifratura della scheda.} La cifratura del voto impiega RSA-OAEP, utilizzando SHA-256 come hash dell'etichetta e MGF1-SHA256. L'elettore cifra la preferenza utilizzando la chiave pubblica dell'elezione $PU_{ele}$; la decifratura è posticipata esclusivamente alla fase di scrutinio, a urne chiuse. Il fattore di casualità $r$ è gestito internamente dalla libreria crittografica e non viene mai esposto all'applicazione. Questo garantisce che il requisito di non disponibilità di $r$ (come da sezione \ref{subsubsec:wp2_cancellazione_prv} del WP2) sia soddisfatto per costruzione. Prima di procedere alla cifratura, la preferenza $i \in \{1,\ldots,N\}$ viene serializzata come intero a 4~byte in formato big-endian (\texttt{VOTE\_INT\_WIDTH~=~4}).
+
+\paragraph{Firme digitali.} La notazione $\mathrm{Sign}_{PR}(H(x))$ definita nel WP2 è
+stata implementata utilizzando \textbf{RSA-PSS}. In linea con i costrutti di sicurezza affrontati nel corso, lo schema adotta la maschera di generazione MGF1-SHA256 e massimizza l'entropia impostando la lunghezza del salt al valore massimo consentito ($\texttt{PSS.MAX\_LENGTH}$),    garantendo così la natura probabilistica della firma. SHA-256 è l'hash interno, applicato una sola volta: si passa la serializzazione canonica del payload a \texttt{private\_key.sign(...)}. Le
+istanze di padding sono costanti di modulo, condivise da tutte le chiamate. Le
+firme sono impiegate dal SA sui certificati pseudonimi, dall'AE sui record
+dell'urna, sulle ricevute, sulle Merkle Root e sul documento finale, e
+dall'elettore sulla \emph{challenge} di proof-of-possession e sul pacchetto di
+voto.
+
+\paragraph{Hashing e nonce.} Funzione di Hashing SHA-256 impiegata per calcolare i commitment ($K_j = H(C_j)$), i
+fingerprint ($F_j = H(K_j \| \eta_j)$), gli hash pointer della catena e i nodi
+del Merkle Tree. I nonce sono valori a 256 bit generati tramite il modulo \texttt{secrets} della
+libreria standard (CSPRNG del sistema operativo).
+
+\paragraph{Autenticazione.} La prova di possesso di $PR_v$ segue il paradigma
+\emph{challenge-response}: il SA genera un nonce, l'elettore lo firma con la propria chiave privata effimera $PR_v$ e
+il SA ne verifica la validità tramite la chiave pubblica $PU_v$ prima di emettere il certificato. L'accesso al
+voto è mediato da un Identity Provider simulato che rilascia un ID~Token firmato che attesta in modo sicuro l'identità dell'utente, la sua eleggibilità e l'esito dell'autenticazione a più fattori (MFA).
+
+\paragraph{Serializzazione canonica.} Tutti i campi che compongono un digest
+firmato sono serializzati con una codifica a \textbf{lunghezza-prefissata (TLV,
+Tag-Length-Value)} strutturata in: \emph{tag}~(1~byte) + \emph{lunghezza}~(4~byte big-endian) +
+\emph{valore}. I tag sono \texttt{0x01}~(bytes), \texttt{0x02}~(int),
+\texttt{0x03}~(str), \texttt{0x04}~(sequenza). La codifica garantisce l'iniettività anche per i
+campi a lunghezza variabile (come \texttt{lista\_candidati} e \texttt{Risultato}),
+prevenendo strutturalmente che tuple diverse possano produrre lo stesso digest. La funzione
+\texttt{wire()} in \texttt{crypto.py} costituisce l'unica fonte di verità del sistema; la medesima forma binaria viene impiegata per calcolare le dimensioni dei messaggi scambiati.
+
+\paragraph{Parametri.} Utilizzo di coppie di chiavi RSA da 2048 bit (esponente pubblico $e = 65537$) e SHA-256 come funzione di hash. Adozione di OAEP per le operazioni di cifratura e PSS per l'apposizione delle firme digitali. I timestamp vengono formattati e inseriti nei digest come numeri interi. Il trasporto è simulato in-process: i tempi riportati riflettono unicamente il costo computazionale di elaborazione, escludendo latenza di rete. La confidenzialità del canale di comunicazione è assunta come prerequisito del modello e non riprodotta esplicitamente nel codice.
 
 \clearpage
 
-\section{Ambiente di implementazione e stack tecnologico}
-\label{sec:wp4_stack}
-
-L'implementazione è in \textbf{Python~3.14.3} con una sola dipendenza esterna:
-\textbf{pyca/cryptography~50.0.1}. I test sono eseguiti con \texttt{pytest}. La
-piattaforma di misura è Windows~11 (10.0.26200-SP0), macchina di sviluppo non
-isolata: i valori assoluti variano da esecuzione a esecuzione; contano gli ordini
-di grandezza e gli andamenti relativi.
-
-Il trasporto è simulato in-process: i tempi riportati rappresentano il solo costo
-di elaborazione, senza latenza di rete. Rete, TLS, PKI e Identity Provider sono
-modellati nell'unico modulo \texttt{sim.py} (\ref{subsec:wp4_simulati}).
-
-\section{Architettura modulare}
+\section{Architettura del codice}
 \label{sec:wp4_architettura}
 
-Il codice è organizzato in dieci moduli, un modulo per attore:
+\subsection{Struttura della repository}
+\label{subsec:wp4_repo}
+
+Il codice è organizzato in modo modulare, associando a ciascun file una
+responsabilità specifica del protocollo, così da rendere esplicita la
+corrispondenza fra gli attori del modello e le componenti implementate.
+
+\begin{lstlisting}[style=consolewp4]
+aps-voting-protocol/
+  DOCUMENTO_SCELTE_IMPLEMENTATIVE.md    relazione tecnica sulle scelte progettuali
+  main.py                               elezione dimostrativa (happy path)
+  pyproject.toml                        configurazione pytest (testpaths, pythonpath)
+  README.md                             istruzioni e documentazione del progetto
+  requirements.txt                      cryptography==50.0.1, pytest==9.1.1
+  wp4_frammento.tex                     sorgente LaTeX del frammento
+  artifacts/                            CSV + RISULTATI_BENCHMARK.txt
+  src/
+    __init__.py                         marca la directory come pacchetto Python
+    ae.py                               Autorita' Elettorale + KeyCustodian 
+    crypto.py                           primitive RSA / SHA-256 / CSPRNG + ser. TLV
+    election.py                         orchestratore + demo_parameters()
+    merkle.py                           Merkle Tree, prove di inclusione O(log n)
+    messages.py                         dataclass per struttura del protocollo di WP2
+    sa.py                               Sistema di Autenticazione
+    sim.py                              orologio, PKI/X.509, canale TLS, IdP 
+    urn.py                              urna pubblica ibrida + UrnView 
+    verifier.py                         Verificatore Pubblico (verifica universale)
+    voter.py                            Elettore (scheda + verifica individuale)
+  tests/                                59 test pytest in 4 file + conftest.py
+  use_cases/
+    adversary_cases.py                  sette profili avversariali, 21 vettori
+    benchmark.py                        tre scenari di misura isolati
+    happy_path.py                       scenario end-to-end con tutti attori onesti
+\end{lstlisting}
+
+\subsection{Moduli e responsabilità}
+\label{subsec:wp4_moduli}
 
 \begin{itemize}
-  \item \texttt{voter.py}, \texttt{sa.py}, \texttt{ae.py}, \texttt{verifier.py}:
-    i quattro attori onesti del modello di WP1 (\ref{sec:1.3_attori_onesti});
-  \item \texttt{urn.py}: urna pubblica ibrida — \emph{hash chain} append-only con
-    indice Merkle Tree — con pubblicazione per finestre e vista pubblica di sola
-    lettura;
-  \item \texttt{crypto.py}: primitive crittografiche (generazione chiavi RSA-2048,
-    RSA-OAEP, firma \emph{hash-and-sign} RSA-PSS, SHA-256, CSPRNG) e
-    serializzazione canonica TLV, unica fonte di verità per i campi firmati e per
-    la misura delle dimensioni dei messaggi;
-  \item \texttt{merkle.py}: Merkle Tree con duplicazione dell'ultimo nodo al
-    livello dispari e prove di inclusione $O(\log n)$;
-  \item \texttt{messages.py}: una \texttt{dataclass} per ogni struttura di WP2
-    ($\mathit{Params}/\mathit{Record}_0$, $C_p$, $M$, $R$, $\mathit{Record}_j$,
-    $\mathit{Invalid}_j$, $\mathit{Record}_{\text{chiusura}}$, radice co-firmata,
-    $\mathit{Doc}_{\text{finale}}$), ognuna con il metodo \texttt{signed\_bytes()};
-  \item \texttt{sim.py}: le astrazioni simulate — orologio iniettabile,
-    PKI/X.509, canale TLS, Identity Provider d'Ateneo (OIDC/SSO/MFA) — in un
-    unico modulo;
-  \item \texttt{election.py}: orchestratore che cabla gli attori per scenari e
-    test.
+  \item \textbf{\texttt{crypto.py} (Primitive Crittografiche):} Gestisce la generazione delle chiavi RSA-2048, la cifratura RSA-OAEP, la firma \emph{hash-and-sign} RSA-PSS, SHA-256, il CSPRNG e la serializzazione canonica TLV. È un modulo completamente indipendente ed è l'unica fonte di verità per i campi firmati e per la misurazione delle dimensioni dei messaggi.
+  
+  \item \textbf{\texttt{merkle.py} (Merkle Tree):} Implementa l'albero di verifica con foglia $H(F_j)$, nodo interno $H(\text{sx}\|\text{dx})$, duplicazione dell'ultimo nodo per i livelli dispari e prove di inclusione con complessità $O(\log n)$.
+  
+  \item \textbf{\texttt{messages.py} (Strutture Dati):} Definisce una \texttt{frozen dataclass} per ogni entità del protocollo WP2 (es. $\mathit{Params}/\mathit{Record}_0$, $C_p$, $M$, $R$, $\mathit{Record}_j$, $\mathit{Invalid}_j$, $\mathit{Record}_{\text{chiusura}}$, Root co-firmata, $\mathit{Doc}_{\text{finale}}$). Ogni struttura espone i metodi \texttt{signed\_bytes()} e \texttt{verify()}; i blocchi della catena espongono inoltre \texttt{block\_digest()}.
+  
+  \item \textbf{\texttt{sim.py} (Astrazioni Simulate):} Raggruppa tutte le simulazioni d'ambiente in un unico modulo: l'orologio iniettabile (\texttt{SimClock}), l'infrastruttura PKI/X.509 (\texttt{CertificateAuthority}), il canale TLS (\texttt{open\_tls\_channel}) e l'Identity Provider d'Ateneo (\texttt{IdentityProvider}, con OIDC/SSO/MFA).
+  
+  \item \textbf{\texttt{sa.py} (Sistema di Autenticazione):} Conosce le identità reali e impone l'unicità \emph{per identità}. Si occupa di verificare la \emph{proof-of-possession} della chiave effimera $PR_v$, emette i certificati $C_p$ e controfirma ogni Merkle Root estrapolata dalla vista pubblica.
+  
+  \item \textbf{\texttt{urn.py} (Urna Pubblica):} Struttura ibrida composta da una \emph{hash chain append-only} e un indice Merkle. Gestisce la pubblicazione per finestre e le Root co-firmate. Include \texttt{UrnView}, un'interfaccia per garantire l'accesso pubblico di sola lettura.
+  
+  \item \textbf{\texttt{ae.py} (Autorità Elettorale):} Esegue i cinque controlli sequenziali in fase di ricezione, emette le ricevute ed effettua lo scrutinio \emph{black-box}. Include la classe \texttt{KeyCustodian} per la conservazione \emph{offline} della chiave di scrutinio $PR_{ele}$.
+  
+  \item \textbf{\texttt{voter.py} (Elettore):} Orchestra la logica lato client: autenticazione, costruzione del pacchetto di voto, verifica della firma dell'AE sulla ricevuta $R$ (effettuata rigorosamente \emph{prima} di cancellare la chiave $PR_v$) e verifica individuale finale.
+  
+  \item \textbf{\texttt{verifier.py} (Verificatore Pubblico):} Attore indipendente che esegue la verifica universale dell'elezione basandosi esclusivamente sui dati pubblicati nell'urna.
+  
+  \item \textbf{\texttt{election.py} (Orchestratore):} Cabla gli attori e le astrazioni simulate, offrendo un'API lineare e pulita per i test e gli scenari. Garantisce la separazione delle responsabilità (non trasferisce mai dati privati dall'AE al SA).
 \end{itemize}
 
-\clearpage
-
-\section{Descrizione dell'implementazione}
-\label{sec:wp4_implementazione}
-
-\subsection{Primitive crittografiche: dal modello al codice}
-\label{subsec:wp4_primitive}
-
-Tutte le operazioni crittografiche sono centralizzate in \texttt{crypto.py}. Le
-istanze di padding sono costanti di modulo, condivise da tutte le chiamate:
-
+\paragraph{Scelte trasversali.}
 \begin{itemize}
-  \item \textbf{Firma digitale}: RSA-PSS con MGF1-SHA256 e lunghezza del sale
-    massima (\texttt{PSS.MAX\_LENGTH}), applicata in modalità \emph{hash-and-sign}.
-    Il modulo calcola SHA-256 del payload serializzato e firma il digest. La
-    notazione $\mathrm{Sign}_{PR}(H(x))$ di WP2 è istanziata come
-    $\text{RSA-PSS-Sign}(PR,\,\texttt{wire}(x))$ con SHA-256 interno (un unico
-    hash).
-
-  \item \textbf{Cifratura del voto}: RSA-OAEP con SHA-256 come hash dell'etichetta
-    e MGF1-SHA256. Il fattore di casualità $r$ è interno alla libreria e non è mai
-    esposto all'applicazione: il requisito di non disponibilità di $r$
-    (\ref{subsubsec:wp2_cancellazione_prv}) è soddisfatto per costruzione.
-
-  \item \textbf{Hashing}: SHA-256 per commitment ($K_j = H(C_j)$), fingerprint
-    ($F_j = H(K_j \| \eta_j)$), hash pointer della catena e nodi del Merkle Tree.
-
-  \item \textbf{Nonce}: modulo \texttt{secrets} della libreria standard Python
-    (CSPRNG del sistema operativo); $\eta$ è di 256~bit (32~byte).
-
-  \item \textbf{Codifica del voto}: la preferenza $i \in \{1,\ldots,N\}$ è
-    codificata come intero a 4~byte big-endian prima della cifratura OAEP
-    (\texttt{VOTE\_INT\_WIDTH~=~4}).
+  \item \textbf{Metriche decentralizzate:} nessun raccoglitore globale; gli scenari misurano i tempi esternamente in variabili locali tramite \texttt{time.perf\_counter}.
+  \item \textbf{Coerenza dei digest:} un unico metodo \texttt{signed\_bytes()} per struttura, affinché non vi sia alcuna divergenza di serializzazione fra il digest calcolato dal mittente e quello ricalcolato dal verificatore.
 \end{itemize}
-
-Le coppie RSA-2048 ($e=65537$) sono generate per: elezione ($PU_{ele}$,
-$PR_{ele}$), SA, AE, coppia effimera dell'elettore ($PU_v$, $PR_v$), CA simulata,
-IdP simulato. Ogni generazione richiede in media $46{,}27$~ms
-(\ref{subsec:wp4_primitive_tempi}).
 
 \subsection{Strutture dati e serializzazione canonica}
 \label{subsec:wp4_strutture}
 
-Ogni struttura di WP2 è una \texttt{frozen dataclass} Python. Il metodo
-\texttt{signed\_bytes()} restituisce la serializzazione TLV (Tag-Length-Value) dei
-campi che entrano nel digest firmato; \texttt{wire()} in \texttt{crypto.py} è
-l'unica fonte di verità per tutte le strutture.
+Per garantire robustezza e coerenza architetturale, l'implementazione delle strutture dati segue regole precise:
 
-La codifica è iniettiva: ogni campo ha il prefisso \emph{tag}~(1~byte) +
-\emph{lunghezza}~(4~byte big-endian) + \emph{valore}. I tag definiti sono:
-\texttt{0x01}~(bytes), \texttt{0x02}~(int), \texttt{0x03}~(str),
-\texttt{0x04}~(sequenza). La lunghezza-prefissata garantisce che stringhe e
-sequenze di lunghezza variabile (\texttt{lista\_candidati}, \texttt{Risultato})
-producano sequenze di byte distinte, prevenendo ambiguità nella verifica delle
-firme. I timestamp entrano nei digest come interi (secondi Unix), non come stringhe.
+\begin{itemize}
+  \item \textbf{Immutabilità strutturale:} Ogni entità definita nel WP2 è implementata nativamente come una \texttt{frozen dataclass}, prevenendo alterazioni accidentali a \emph{runtime}.
+  \item \textbf{Serializzazione selettiva:} Il metodo \texttt{signed\_bytes()} restituisce la serializzazione TLV dei soli campi destinati al digest firmato (escludendo il campo della firma stessa).
+  \item \textbf{Concatenazione dei blocchi:} I nodi della \emph{hash chain} espongono un metodo aggiuntivo \texttt{block\_digest()~=~$H(\texttt{wire}([\texttt{signed\_bytes}, \texttt{signature}]))$}. Questo calcola l'hash dell'intero blocco (firma inclusa), fungendo in modo sicuro da \emph{hash pointer} per l'anello successivo della catena.
+\end{itemize}
 
-\subsection{Flusso di esecuzione: mappatura delle fasi}
-\label{subsec:wp4_fasi}
+La tabella seguente mappa le strutture teoriche del WP2 sulle classi concrete e sui relativi campi firmati:
 
 \begin{center}
 \small
-\begin{tabular}{|p{1.6cm}|p{11.5cm}|}
+\begin{tabular}{|l|l|p{6.6cm}|}
 \hline
-\textbf{Fase} & \textbf{Funzioni principali} \\
+\textbf{WP2} & \textbf{Classe} & \textbf{Campi firmati} \\
 \hline
-0 & \texttt{Election.setup}: generazione chiavi AE, SA, IdP, CA; distribuzione
-    autenticata via \texttt{CertificateAuthority.issue} +
-    \texttt{open\_tls\_channel};
-    \texttt{PublicUrn.\_\_init\_\_} $\to$ \texttt{GenesisRecord.create} firmato
-    dall'AE \\
+$\mathit{Params}/\mathit{Record}_0$ & \texttt{GenesisRecord} &
+  \texttt{id\_elezione, PU\_ele(DER), N, lista\_candidati, t\_apertura, t\_chiusura} \\
 \hline
-1 & \texttt{Voter.start\_session} (keygen effimero $PU_v/PR_v$);
-    \texttt{IdentityProvider.authenticate} (SSO + MFA, ID Token firmato);
-    \texttt{AuthServer.request\_challenge} (verifica ID Token: autenticità,
-    elezione, MFA, eleggibilità, unicità per identità; emissione challenge);
-    \texttt{AuthServer.issue\_certificate} (proof-of-possession di $PR_v$
-    $\to$ \texttt{Certificate.create});
-    verifica $C_p$ lato elettore \\
+$C_p$ & \texttt{Certificate} & \texttt{PU\_v(DER), id\_elezione} \\
 \hline
-2 & \texttt{Voter.build\_ballot}: $C = \text{RSA-OAEP-Enc}(PU_{ele},i\,;r)$,
-    $\eta \leftarrow \text{CSPRNG}(256\text{~bit})$, Encrypt-then-Sign $\sigma$,
-    pacchetto $M$ \\
+$M$ & \texttt{BallotPacket} & \texttt{C, C\_p, eta, id\_elezione} (firma effimera $\sigma$) \\
 \hline
-3 & \texttt{ElectoralAuthority.receive\_ballot}: 5 controlli sequenziali
-    (finestra temporale $\to$ firma SA su $C_p$ + coerenza $id_{\text{elezione}}$
-    $\to$ unicità $PU_v$ $\to$ anti-replay $\eta$ $\to$ integrità $\sigma$ con
-    $PU_v$ estratta da $C_p$);
-    \texttt{Receipt.create}; \texttt{PublicUrn.buffer\_record};
-    \texttt{Voter.process\_receipt} (verifica firma AE su $R$
-    \emph{prima} di cancellare $PR_v$) \\
+$R$ & \texttt{Receipt} & \texttt{K\_j, F\_j, j, id\_elezione} \\
 \hline
-4 & \texttt{ElectoralAuthority.close} $\to$ \texttt{ClosureRecord.create};
-    \texttt{AuthServer.cosign\_roots} (co-firma Root definitiva dalla sola vista
-    pubblica dell'urna) \\
+$\mathit{Record}_j$ & \texttt{VoteRecord} & \texttt{j, K\_j, F\_j, H(Record\_\{j-1\})} \\
 \hline
-5 & \texttt{ElectoralAuthority.activate\_tally\_key} (iniezione tardiva di
-    $PR_{ele}$ da \texttt{KeyCustodian}); \texttt{ElectoralAuthority.tally}:
-    decifratura $C_j$, controllo $1 \le i \le N$,
-    \texttt{PublicUrn.append\_invalid} per $\mathit{Invalid}_j$,
-    \texttt{FinalDocument.create} \\
+$\mathit{Invalid}_j$ & \texttt{InvalidRecord} &
+  \texttt{id\_elezione, j, K\_j, motivo, H(Record\_prec)} \\
 \hline
-\textbf{[VER-1]} & \texttt{Voter.verify\_individual\_inclusion}: ricalcolo $K$,
-    $F$; verifica firme AE e SA sulla Root definitiva co-firmata; Merkle proof
-    di $F_j$; coerenza con il $\mathit{Record}_j$ nella catena \\
+Radice co-firmata & \texttt{CoSignedRoot} & solo \texttt{root} (32~B), firmata da AE e da SA \\
 \hline
-\textbf{[VER-2]} & \texttt{PublicVerifier.verify\_universal}: integrità
-    sequenziale della hash chain; firme AE su ogni blocco; doppia firma (AE+SA)
-    su ogni Root; consistenza Root con $\mathit{Record}_{\text{chiusura}}$ e
-    $\mathit{Doc}_{\text{finale}}$; coerenza numerica
-    $k_{\text{conformi}}+k_{\text{invalide}}=k_{\text{totale}}$ per tipo di
-    record; autenticità del $\mathit{Doc}_{\text{finale}}$ \\
+$\mathit{Record}_{\text{chiusura}}$ & \texttt{ClosureRecord} &
+  \texttt{k\_totale, MerkleRoot\_finale, H(Record\_n)} \\
+\hline
+$\mathit{Doc}_{\text{finale}}$ & \texttt{FinalDocument} &
+  \texttt{Risultato, k\_totale, k\_conformi, k\_invalide, Merkle\_Root\_finale} \\
 \hline
 \end{tabular}
 \end{center}
+\begin{center}\small\itshape Strutture di WP2 e classi corrispondenti in \texttt{messages.py}.\end{center}
 
 \subsection{Urna pubblica ibrida}
 \label{subsec:wp4_urna}
 
-L'urna (\texttt{urn.py}) combina due strutture dati complementari.
+L'urna pubblica (\texttt{urn.py}) implementa una logica ibrida, combinando due strutture dati complementari e un meccanismo di accodamento a blocchi:
 
-\paragraph{Hash chain.}
-La lista \texttt{PublicUrn.chain} è append-only: ogni blocco $\mathit{Record}_k$
-contiene l'hash pointer $h_{k-1} = H(\mathit{Record}_{k-1})$ e la firma AE
-$\sigma_{\mathit{AE}} = \mathrm{Sign}_{PR_{AE}}(\texttt{signed\_bytes}(\mathit{Record}_k))$.
-Qualsiasi modifica retroattiva invalida la firma del blocco e/o il puntatore del
-successivo, rilevata da \textbf{[VER-2]}. Il ciphertext $C_j$ non compare mai
-nell'urna: sono pubblicati solo $K_j = H(C_j)$ e $F_j = H(K_j \| \eta_j)$.
+\begin{itemize}
+  \item \textbf{Hash chain (\emph{Append-only}):} La lista \texttt{PublicUrn.chain} garantisce l'immutabilità storica. Ogni blocco $\mathit{Record}_k$ contiene l'hash pointer $h_{k-1} = H(\mathit{Record}_{k-1})$ e la firma $\sigma_{\mathit{AE}} = \mathrm{Sign}_{PR_{AE}}(\texttt{signed\_bytes}(\mathit{Record}_k))$. Qualsiasi modifica retroattiva invalida la catena e viene intercettata dal controllo \textbf{[VER-2]}. A tutela della privacy, l'urna espone solo i digest $K_j = H(C_j)$ e $F_j = H(K_j \| \eta_j)$; il ciphertext $C_j$ risiede unicamente nell'archivio privato (\texttt{\_archive}) e non viene mai pubblicato.
 
-\paragraph{Merkle Tree.}
-Il Merkle Tree (\texttt{merkle.py}) è costruito sui fingerprint $F_j$ dei
-$\mathit{VoteRecord}$. Foglia: $H(F_j)$; nodo interno:
-$H(\text{figlio\_sx} \| \text{figlio\_dx})$. Se il livello ha un numero dispari
-di nodi, l'ultimo è \emph{duplicato}. L'ambiguità che ne deriva (stessa radice per
-$n$ e $n+1$ foglie quando $n$ è pari) è chiusa a livello di protocollo: il valore
-\texttt{leaf\_count} è firmato insieme alla radice (in \texttt{CoSignedRoot}) e
-incrociato con il conteggio dei $\mathit{VoteRecord}$ effettivi nella catena dalla
-verifica universale.
+  \item \textbf{Merkle Tree:} Costruito all'interno di \texttt{merkle.py} sui fingerprint $F_j$. Per gestire i livelli con un numero dispari di nodi, l'algoritmo duplica l'ultimo nodo. L'ambiguità strutturale (stessa radice per $n$ e $n+1$ foglie) viene neutralizzata a livello di protocollo: il metadato \texttt{leaf\_count} funge da \emph{sanity-check}, mentre il conteggio autoritativo $k_{\text{totale}}$ (contenuto nel $\mathit{Record}_{\text{chiusura}}$ firmato) viene incrociato e verificato in modo universale con i $\mathit{VoteRecord}$ effettivi.
 
-\paragraph{Pubblicazione per finestre.}
-I record accettati sono bufferizzati e pubblicati a blocchi; l'indice $j$ è fissato
-all'accettazione e non cambia. Al termine di ogni finestra l'AE pubblica una Merkle
-Root firmata, co-firmata dal SA leggendo la sola vista pubblica
-(\texttt{AuthServer.cosign\_roots}). La latenza di pubblicazione rompe la
-correlazione temporale che un SA disonesto potrebbe sfruttare per de-anonimizzare
-le preferenze (\ref{subsec:3.3.5_vincolo_sec2}).
+  \item \textbf{Pubblicazione per finestre (Anti-correlazione):} I record accettati vengono differiti e aggregati in lotti. Il metodo \texttt{buffer\_record()} fissa definitivamente l'indice $j$, mentre \texttt{flush\_window()} li accoda in blocco pubblicando una Merkle Root intermedia co-firmata da AE e SA. Questa latenza artificiale spezza la correlazione temporale che un SA disonesto potrebbe usare per de-anonimizzare i voti (come da Modello di Minaccia, \ref{subsec:3.3.5_vincolo_sec2}). Infine, il metodo \texttt{close()} congela l'urna pubblicando la Root definitiva.
+\end{itemize}
 
 \subsection{Separazione degli attori e non-collusione}
-\label{subsec:wp4_non_collusione}
+\label{sec:wp4_non_collusione}
 
-Le assunzioni di fiducia di WP1 (\ref{sec:1.4_assunzioni_fiducia}) sono tradotte
-in vincoli strutturali del codice:
-
-\begin{itemize}
-  \item Il registro interno del SA (\texttt{\_identity\_register}) non è mai
-    condiviso con l'AE. La co-firma delle Merkle Root avviene tramite
-    \texttt{AuthServer.cosign\_roots(ae.view())}: il SA legge solo la vista
-    pubblica, mai i dati interni dell'AE.
-
-  \item $PR_{ele}$ non è nel costruttore di \texttt{ElectoralAuthority}: è
-    custodito da \texttt{KeyCustodian} e rilasciato solo dopo $t_{\text{chiusura}}$
-    e dopo la chiusura effettiva dell'urna. Qualsiasi tentativo di attivazione
-    anticipata lancia \texttt{TallyKeyError}.
-
-  \item L'orchestratore \texttt{election.py} non passa mai dati privati dell'AE al
-    SA. La non-collusione è documentata nei docstring dei moduli e verificata
-    negli scenari di resilienza (\ref{sec:wp4_minacce}).
-\end{itemize}
-
-\subsection{Elementi simulati e scostamenti dalla notazione di WP2}
-\label{subsec:wp4_simulati}
-
-\paragraph{Elementi simulati.}
+Le assunzioni di fiducia del WP1 (\ref{sec:1.4_assunzioni_fiducia}) sono state tradotte
+in vincoli strutturali all'interno del codice:
 
 \begin{itemize}
-  \item \textbf{Rete e RTT}: chiamate in-process; i tempi di interazione misurati
-    sono di sola elaborazione, senza latenza di rete.
-
-  \item \textbf{TLS}: \texttt{open\_tls\_channel()} verifica il certificato X.509
-    del server contro la CA, simulando l'autenticazione del server nell'handshake.
-    La confidenzialità del payload in transito è \emph{assunta}: le proprietà
-    \textbf{[SEC-1]} e \textbf{[SEC-2]} in transito rimangono assunzioni, non
-    risultati dimostrati dal codice (\ref{subsec:3.3.4_limite_sec1}).
-
-  \item \textbf{PKI/X.509}: la \texttt{CertificateAuthority} lega
-    $(subject,\,PU,\,\text{validità})$ con una firma RSA-PSS; nessuna catena di
-    certificati, nessuna revoca (CRL/OCSP).
-
-  \item \textbf{IdP/OIDC/SSO/MFA}: l'\texttt{IdentityProvider} rilascia un ID
-    Token firmato con identità, eleggibilità ed esito MFA come flag booleano. Il
-    flusso OIDC passo-passo e il protocollo FIDO2/WebAuthn non sono riprodotti.
-
-  \item \textbf{$PR_{ele}$ offline}: il \texttt{KeyCustodian} impone il gate su
-    $t_{\text{chiusura}}$ via confronto temporale; la custodia fisica offline
-    resta una garanzia procedurale, come riconosciuto in WP3
-    (\ref{subsec:3.3.2_limite_int2}).
-
-  \item \textbf{Fattore $r$ di OAEP}: mai esposto da \texttt{cryptography}; il
-    requisito di non disponibilità è soddisfatto per costruzione.
-
-  \item \textbf{Orologio}: \texttt{SimClock} è iniettabile da test e scenari; i
-    confronti temporali nell'AE e nel \texttt{KeyCustodian} usano
-    \texttt{self.\_clock()} — non \texttt{time.time()} direttamente —
-    consentendo l'esercizio deterministico della finestra di voto e della chiusura
-    senza attese reali. L'avanzamento è esplicito nel chiamante, mai
-    nell'orchestratore.
-\end{itemize}
-
-\paragraph{Scostamenti dalla notazione di WP2.}
-
-\begin{itemize}
-  \item[(i)] $\mathrm{Sign}_{PR}(H(x))$ è istanziato come RSA-PSS-Sign$(PR,\,\texttt{wire}(x))$
-    con SHA-256 interno: un unico hash.
-
-  \item[(ii)] I campi firmati usano serializzazione TLV lunghezza-prefissata:
-    garantisce l'iniettività anche per sequenze di lunghezza variabile
-    (\texttt{lista\_candidati}, \texttt{Risultato}).
-
-  \item[(iii)] In $\mathit{Invalid}_j$ il digest firmato include l'hash pointer
-    (come in $\mathit{Record}_j$), perché $\mathit{Invalid}_j$ è un blocco della
-    catena.
-
-  \item[(iv)] Le Merkle Root sono firmate da AE e SA \emph{sul solo valore della
-    radice} (32~byte), aderendo alla lettera di WP2.
-
-  \item[(v)] I timestamp entrano nei digest come interi (secondi Unix).
-
-  \item[(vi)] Il voto $i$ è codificato come intero a 4~byte big-endian prima di
-    OAEP.
+  \item \textbf{Isolamento dei registri (Non-collusione SA/AE):} Il registro interno del SA (\texttt{\_identity\_register}) non viene mai condiviso con l'AE. La co-firma delle Merkle Root avviene tramite il metodo \texttt{AuthServer.cosign\_roots(ae.view())}: questo garantisce che il SA legga esclusivamente la vista pubblica, senza poter mai accedere allo stato interno o ai dati privati dell'AE.
+  
+  \item \textbf{Custodia \emph{offline} della chiave di scrutinio:} La chiave privata dell'elezione $PR_{ele}$ non viene mai passata al costruttore di \texttt{ElectoralAuthority}. Viene invece segregata in un'apposita classe \texttt{KeyCustodian} e rilasciata solo tramite \texttt{activate\_tally\_key()}. Questo metodo rifiuta tassativamente il rilascio della chiave se $\texttt{now} < t_{\text{chiusura}}$ o se l'urna risulta ancora aperta, sollevando tempestivamente un \texttt{TallyKeyError}.
+  
+  \item \textbf{Avanzamento esplicito del tempo:} La transizione a $t_{\text{chiusura}}$ è controllata in modo trasparente dal chiamante. Il metodo \texttt{Election.close\_and\_tally()} non manipola l'orologio interno (prevenendo "viaggi nel tempo" fraudolenti da parte dell'AE) e solleva un \texttt{RuntimeError} se invocato a seggi aperti. È onere del simulatore o dello scenario di test far scorrere il tempo in modo esplicito tramite \texttt{election.clock.set(params.t\_chiusura + 1)}.
+  
+  \item \textbf{Modello \emph{one-shot} irrevocabile:} Il sistema non espone intenzionalmente alcuna API per la revoca, l'aggiornamento o la sostituzione della scheda. Un secondo pacchetto di voto $M$ firmato e inviato con la medesima chiave effimera $PU_v$ viene implacabilmente respinto dal Controllo 3 in fase di ricezione.
 \end{itemize}
 
 \clearpage
 
-\section{Risultati sperimentali}
-\label{sec:wp4_risultati}
+\section{Flusso del protocollo implementato}
+\label{sec:wp4_flusso}
 
-\subsection{Metodologia di misura}
+Il flusso dell'implementazione ricalca l'ordine logico delle fasi descritte nel WP2. Le sottosezioni seguenti ne descrivono la realizzazione a livello di codice, mentre la Tabella~\ref{tab:wp4_fasi} riassume le funzioni principali di ciascuna fase.
+
+\begin{itemize}
+  \item \textbf{Fase 0 --- Setup:} Il metodo \texttt{Election.setup} genera le coppie di chiavi RSA per AE, SA, IdP e CA simulata. Le chiavi pubbliche vengono autenticate dalla CA tramite \texttt{CertificateAuthority.issue}, e i canali verso i server vengono messi in sicurezza verificando il certificato X.509 (\texttt{open\_tls\_channel}), simulando un \emph{handshake} TLS. Infine, \texttt{PublicUrn.\_\_init\_\_} pubblica il blocco genesi $\mathit{Record}_0$ tramite \texttt{GenesisRecord.create}, apponendo la firma dell'AE sui parametri immutabili dell'elezione.
+
+  \item \textbf{Fase 1 --- Autenticazione ed emissione di $C_p$:} L'elettore genera la coppia effimera $(PU_v, PR_v)$ e si autentica presso l'\texttt{IdentityProvider} (tramite SSO e MFA, ottenendo un ID Token firmato). Il SA riceve l'ID Token, ne verifica autenticità, elezione, esito MFA, eleggibilità e unicità dell'identità, ed emette una \emph{challenge}. L'elettore firma la \emph{challenge} con $PR_v$; il SA verifica questa \emph{proof-of-possession} e rilascia il certificato pseudonimo $C_p$ (\texttt{Certificate.create}), che l'elettore provvederà a validare localmente.
+
+  \item \textbf{Fase 2 --- Costruzione della scheda:} Tramite \texttt{Voter.build\_ballot}, la preferenza $i$ viene codificata come intero a 4 byte. Il metodo calcola il ciphertext $C = \text{RSA-OAEP-Enc}(PU_{ele}, i; r)$, estrae un nonce $\eta \leftarrow \text{CSPRNG}(256\text{~bit})$ e firma l'intero pacchetto applicando il paradigma \emph{Encrypt-then-Sign} (la firma $\sigma$ copre $C$, $C_p$, $\eta$ e $id_{\text{elezione}}$), assemblando così il pacchetto $M$.
+
+  \item \textbf{Fase 3 --- Ricezione e ricevuta:} Il metodo \texttt{ElectoralAuthority.receive\_ballot} sottopone il pacchetto a cinque controlli sequenziali a esito binario:
+  \begin{enumerate}
+    \item \textbf{Finestra temporale:} $t_{\text{apertura}} \le \texttt{now} \le t_{\text{chiusura}}$ (confronto reale con l'orologio).
+    \item \textbf{Autorizzazione:} Validità della firma del SA su $C_p$ \emph{e} coerenza degli identificativi ($C_p.id = M.id = \text{elezione corrente}$).
+    \item \textbf{Unicità:} Controllo che $PU_v$ non sia già presente nel \texttt{\_ephemeral\_register} (difesa dal doppio voto).
+    \item \textbf{Anti-replay:} Controllo che il nonce $\eta$ non figuri nel \texttt{\_nonce\_register}.
+    \item \textbf{Integrità:} Verifica della firma effimera $\sigma$ utilizzando la chiave pubblica $PU_v$ \emph{estratta direttamente} dal certificato $C_p$.
+  \end{enumerate}
+  L'iscrizione nei registri avviene esclusivamente in caso di accettazione totale. Superati i controlli, l'AE calcola $K_j$ e $F_j$, emette la ricevuta $R$ firmata (\texttt{Receipt.create}) e accoda temporaneamente il record (\texttt{PublicUrn.buffer\_record}). Fondamentale per la sicurezza: l'elettore verifica la firma $\mathrm{Sign}_{PR_{AE}}(R)$ tramite \texttt{Voter.process\_receipt} \emph{prima} di cancellare $PR_v$. In caso di esito negativo, la chiave privata non viene distrutta, permettendo la ritrasmissione.
+
+  \item \textbf{Fase 4 --- Chiusura:} Il metodo \texttt{ElectoralAuthority.close} esegue il \emph{flush} finale, pubblica il $\mathit{Record}_{\text{chiusura}}$ e la Root definitiva. Parallelamente, \texttt{AuthServer.cosign\_roots} appone la co-firma del SA sulla Root, leggendola rigorosamente dalla sola vista pubblica dell'urna.
+
+  \item \textbf{Fase 5 --- Scrutinio:} Viene invocato \texttt{ElectoralAuthority.activate\_tally\_key} per iniettare $PR_{ele}$ dal \texttt{KeyCustodian} (operazione strutturalmente bloccata a seggi aperti). Il metodo \texttt{tally} decifra ogni ciphertext $C_j$ validando il dominio $1 \le i \le N$. Per ogni scheda non conforme, accoda un $\mathit{Invalid}_j$ firmato (\texttt{PublicUrn.append\_invalid}) e produce il $\mathit{Doc}_{\text{finale}}$ contenente i risultati aggregati. I \emph{plaintext} non vengono mai memorizzati né ricollegati ai fingerprint $F_j$, garantendo un processo di scrutinio strettamente \emph{black-box}.
+\end{itemize}
+
+\paragraph{Verifiche del protocollo}
+\begin{itemize}
+  \item \textbf{Verifica individuale [VER-1]:} Tramite \texttt{Voter.verify\_individual\_inclusion}, l'elettore ricalcola $K$ e $F$, valida entrambe le firme (AE e SA) sulla Root definitiva co-firmata, estrae la \emph{Merkle proof} per $F_j$ e ne verifica la correttezza incrociandola con il $\mathit{Record}_j$ presente nella catena.
+  
+  \item \textbf{Verifica universale [VER-2]:} L'attore \texttt{PublicVerifier.verify\_universal} esegue un audit completo e indipendente. Controlla l'integrità sequenziale della \emph{hash chain}, convalida le firme dell'AE su ogni blocco e le doppie firme (AE+SA) sulle Root, accerta la consistenza della Root con il $\mathit{Record}_{\text{chiusura}}$ e il $\mathit{Doc}_{\text{finale}}$. Infine, valida l'autenticità del documento finale e l'equazione di coerenza numerica ($k_{\text{conformi}} + k_{\text{invalide}} = k_{\text{totale}}$), verificando l'esatta corrispondenza tra i record $\mathit{Invalid}_j$ e i $\mathit{Record}_j$ effettivi.
+\end{itemize}
+
+\begin{center}
+\small
+\begin{tabular}{|p{1.4cm}|p{11.4cm}|}
+\hline
+\textbf{Fase} & \textbf{Funzioni principali} \\
+\hline
+0 & \texttt{Election.setup}; \texttt{CertificateAuthority.issue} +
+    \texttt{open\_tls\_channel}; \texttt{PublicUrn.\_\_init\_\_} $\to$
+    \texttt{GenesisRecord.create} \\
+\hline
+1 & \texttt{Voter.authenticate} (keygen effimero);
+    \texttt{IdentityProvider.authenticate} (SSO + MFA);
+    \texttt{AuthServer.request\_challenge} / \texttt{issue\_certificate}
+    (proof-of-possession $\to$ \texttt{Certificate.create}) \\
+\hline
+2 & \texttt{Voter.build\_ballot}: \texttt{crypto.oaep\_encrypt},
+    $\eta \leftarrow \text{CSPRNG}$, \texttt{BallotPacket.create} \\
+\hline
+3 & \texttt{ElectoralAuthority.receive\_ballot} (5 controlli);
+    \texttt{Receipt.create}; \texttt{PublicUrn.buffer\_record};
+    \texttt{Voter.process\_receipt} \\
+\hline
+4 & \texttt{ElectoralAuthority.close} $\to$ \texttt{PublicUrn.close} +
+    \texttt{ClosureRecord.create}; \texttt{AuthServer.cosign\_roots} \\
+\hline
+5 & \texttt{ElectoralAuthority.activate\_tally\_key} / \texttt{tally};
+    \texttt{PublicUrn.append\_invalid}; \texttt{FinalDocument.create} \\
+\hline
+[VER-1] & \texttt{Voter.verify\_individual\_inclusion} \\
+\hline
+[VER-2] & \texttt{PublicVerifier.verify\_universal} \\
+\hline
+\end{tabular}
+\end{center}
+\vspace{-0.3cm}
+\begin{center}\small Tabella~\ref{tab:wp4_fasi}: mappatura delle fasi di WP2 sulle funzioni del prototipo.\end{center}
+\label{tab:wp4_fasi}
+
+\clearpage
+
+\section{Esempio di esecuzione}
+\label{sec:wp4_esempio}
+
+Per verificare il corretto collegamento operativo di tutte le fasi descritte, è stata simulata un'elezione completa \emph{end-to-end} lanciando l'entrypoint \texttt{python main.py}. Lo scenario è configurato con i seguenti parametri:
+\begin{itemize}
+  \item \textbf{Configurazione:} $N = 4$ liste, \texttt{id\_elezione = "unisa-cds-2026"}, pubblicazione differita ogni 10 schede accettate.
+  \item \textbf{Partecipazione:} 100 elettori. Ogni elettore $k$ vota deterministicamente la lista $(k \bmod 4) + 1$.
+  \item \textbf{Risultato atteso:} Pareggio perfetto con 25 voti per ciascuna lista: $[25, 25, 25, 25]$.
+\end{itemize}
+
+Questo scenario si concentra esclusivamente sul \emph{flusso logico} e sul superamento dei controlli, distinguendosi dai benchmark (\ref{sec:wp4_benchmark}) che invece isolano le metriche prestazionali. Poiché il sistema utilizza primitive probabilistiche (RSA-OAEP, RSA-PSS e generazione di chiavi effimere), alcuni valori nell'output (come firme, commitment $K_j$ e Merkle Root) cambieranno a ogni esecuzione. Tuttavia, a parità di voti, l'esito dello scrutinio e l'esito delle verifiche resteranno invariati.
+
+\begin{lstlisting}[style=consolewp4]
+==============================================================================
+Elezione 'unisa-cds-2026'  -  N=4 liste  -  100 elettori
+Finestra di voto: [1699999999, 1700003600]  (epoch)
+Pubblicazione per finestre: ogni 10 schede accettate
+==============================================================================
+  studente_000: C_p emesso, voto -> lista 1, ricevuta R con j=1, PR_v cancellato=True
+  studente_001: C_p emesso, voto -> lista 2, ricevuta R con j=2, PR_v cancellato=True
+  studente_002: C_p emesso, voto -> lista 3, ricevuta R con j=3, PR_v cancellato=True
+  studente_003: C_p emesso, voto -> lista 4, ricevuta R con j=4, PR_v cancellato=True
+  [...]
+  studente_099: C_p emesso, voto -> lista 4, ricevuta R con j=100, PR_v cancellato=True
+------------------------------------------------------------------------------
+Chiusura + scrutinio black-box: Record_chiusura con k_totale=100
+Risultato=[25, 25, 25, 25]  (conformi=100, invalide=0)
+Atteso:   [25, 25, 25, 25]
+Controllo amministrativo: schede totali (100) <= certificati emessi (100): True
+------------------------------------------------------------------------------
+Verifica universale:
+  [OK ] catena_non_vuota
+  [OK ] blocco_0_e_genesi
+  [OK ] un_solo_record_chiusura
+  [OK ] firma_genesi
+  [OK ] params_genesi_coerenti
+  [OK ] integrita_sequenziale_hash_chain
+  [OK ] firme_AE_su_ogni_blocco
+  [OK ] merkle_root_vs_record_chiusura
+  [OK ] cofirme_AE_SA_su_ogni_merkle_root
+  [OK ] root_definitiva_cofirmata_coincide
+  [OK ] doc_finale_presente
+  [OK ] firma_doc_finale
+  [OK ] merkle_root_vs_doc_finale
+  [OK ] k_totale_chain_vs_record_chiusura
+  [OK ] k_totale_doc_vs_chain
+  [OK ] k_invalide_doc_vs_chain
+  [OK ] k_conformi_doc_vs_chain
+  [OK ] equazione_coerenza_numerica
+  [OK ] risultato_lunghezza_N
+  [OK ] somma_risultato_uguale_k_conformi
+  [OK ] invalid_j_corrispondono_a_record_j
+  => esito complessivo: POSITIVO
+------------------------------------------------------------------------------
+Verifica individuale positiva per tutti i 100 elettori: True
+==============================================================================
+HAPPY PATH: SUCCESSO
+==============================================================================
+\end{lstlisting}
+
+
+\paragraph{Analisi dell'output.}
+L'esecuzione del prototipo dimostra il rispetto dei vincoli architetturali:
+\begin{itemize}
+  \item \textbf{Sicurezza dell'elettore:} Le righe di log certificano che l'indice $j$ viene fissato al momento dell'accettazione e che la chiave privata effimera $PR_v$ viene distrutta \emph{esclusivamente dopo} aver verificato con successo la ricevuta dell'AE.
+  \item \textbf{Audit Amministrativo:} Alla chiusura, oltre alla correttezza dei risultati, viene superato il controllo amministrativo ($k_{\text{totale}} \le \text{certificati emessi}$). Questo riscontro è a uso esclusivo di un ipotetico auditor interno all'Ateneo, poiché il Verificatore Pubblico non ha accesso ai registri privati del SA.
+  \item \textbf{Verifica Universale [VER-2]:} I 21 controlli superati mappano in rapporto uno-a-uno i requisiti teorici di WP2 (\S\ref{subsec:wp2_verifica_universale}). L'algoritmo convalida l'integrità della \emph{hash chain}, tutte le firme dell'AE, le doppie co-firme (AE+SA) sulle Root, la corrispondenza dei record invalidi e la coerenza numerica ($k_{\text{conformi}} + k_{\text{invalide}} = k_{\text{totale}}$).
+  \item \textbf{Verifica Individuale [VER-1]:} L'ultimo controllo attesta che tutti i 100 elettori sono riusciti a ricalcolare autonomamente i digest $K$ e $F$, e a validare con successo la \emph{Merkle proof} contro la Root definitiva co-firmata.
+\end{itemize}
+
+\clearpage
+
+\section{Verifica operativa dei controlli e suite di test}
+\label{sec:wp4_test}
+
+Oltre all'esecuzione dell'\emph{happy path}, il prototipo è stato sottoposto a una verifica operativa per dimostrare che i controlli architetturali respingano efficacemente i comportamenti non validi. Gli strumenti di validazione si dividono in una suite \texttt{pytest} e due script eseguibili.
+
+\paragraph{Suite \texttt{pytest}: 59 test, 100\% di success rate.} 
+Per non far dominare il costo computazionale dalle operazioni di \emph{keygen} pur mantenendo l'autenticità crittografica delle verifiche, una \emph{fixture} apposita (\texttt{conftest.py}) pre-genera un pool di 120 coppie RSA-2048 reali una sola volta per sessione. La copertura è suddivisa come segue:
+
+
+\begin{itemize}
+  \item \textbf{\texttt{test\_happy\_path.py} (6 test):} Verifica il successo delle validazioni individuali e universali, garantisce che la firma su $R$ venga verificata \emph{prima} della cancellazione di $PR_v$, controlla l'assenza di ciphertext nell'urna, la corretta pubblicazione per finestre e l'apposizione della doppia co-firma sulle Root.
+  
+  \item \textbf{\texttt{test\_threat\_model.py} (18 test):} Copre i 5 controlli sequenziali di ricezione. Simula attacchi MITM sui byte in transito, tentativi di \emph{replay}, doppio voto, doppie richieste di $C_p$, certificati contraffatti, \emph{proof-of-possession} invalide, elettori non aventi diritto o privi di MFA. Verifica inoltre che le schede non conformi generino correttamente i record $\mathit{Invalid}_j$ per i tre motivi previsti e che $PR_{ele}$ non sia attivabile prima di $t_{\text{chiusura}}$.
+  
+  \item \textbf{\texttt{test\_integrity\_negative.py} (13 test):} Parte da uno \emph{snapshot} valido per poi testare scenari negativi: record modificati/rimossi/iniettati, firme AE contraffatte, Merkle Root incoerenti con il $\mathit{Doc}_{\text{finale}}$ o documenti alterati, Root senza co-firma (o con firma SA contraffatta), e $\mathit{Invalid}_j$ duplicati o riferiti a indici inesistenti. Appura infine che la verifica individuale fallisca se $F_j$ scompare o la Root viene alterata.
+  
+  \item \textbf{\texttt{test\_merkle.py} (22 test):} Svolge un \emph{roundtrip} completo della prova di inclusione su tutti gli indici per $n \in \{1,\ldots,100\}$, confermando la lunghezza logaritmica $\lceil\log_2 n\rceil$. Dimostra inoltre che l'albero si impegna sul numero di foglie e verifica l'iniettività della funzione \texttt{wire} sui campi a lunghezza variabile.
+\end{itemize}
+
+
+\paragraph{Script eseguibili ed Use Cases.}
+L'implementazione fornisce script per simulare interi scenari:
+\begin{itemize}
+  \item \textbf{Happy Path (\texttt{main.py}):} Percorre un'elezione completa e priva di anomalie, restituendo \texttt{exit 0} solo in caso di esito totalmente positivo per i controlli \textbf{[VER-1]} e \textbf{[VER-2]}.
+  \item \textbf{Modello di Minaccia (\texttt{use\_cases/adversary\_cases.py}):} Esegue una verifica contro i sette profili avversariali definiti nel WP1 (\ref{sec:1.5_threat_model}). Per ciascun profilo illustra i vettori neutralizzati (21 vettori verificati su 21), evidenzia i vincoli pubblici che smaschererebbero eventuali abusi da parte di un \emph{insider} e documenta apertamente i limiti dichiarati come "rischio residuo". I dettagli estesi di questa analisi sono riportati in \ref{sec:wp4_minacce}.
+\end{itemize}
+
+\clearpage
+
+\section{Benchmark e metriche misurate}
+\label{sec:wp4_benchmark}
+
+\subsection{Metodologia e ambiente di misura}
 \label{subsec:wp4_metodologia}
 
-Le misure sono raccolte in tre scenari isolati tramite \texttt{time.perf\_counter}:
-(1)~microbenchmark delle primitive crittografiche, (2)~elezione end-to-end con 60
-elettori, (3)~verifiche su urne sintetiche di dimensione crescente. I CSV completi
-sono in \texttt{wp4/artifacts/}; i valori citati nel testo ne sono un estratto
-fedele. La macchina di misura è un portatile da sviluppo non isolato: i valori
-assoluti sono indicativi degli ordini di grandezza, non confrontabili con ambienti
-di produzione.
+
+Le metriche prestazionali sono state raccolte eseguendo tre scenari isolati tramite lo script \texttt{use\_cases/benchmark.py}. Per garantire l'affidabilità della misurazione, il cronometraggio è avvenuto localmente tramite \texttt{time.perf\_counter}, mantenendo un'assoluta assenza di stato globale. Gli scenari coprono:
+\begin{enumerate}
+  \item Microbenchmark delle primitive crittografiche isolate.
+  \item Elezione completa \emph{end-to-end} con 60 elettori.
+  \item Test di scalabilità su urne sintetiche di dimensione crescente.
+\end{enumerate}
+
+I file CSV generati in \texttt{wp4/artifacts/} costituiscono la fonte autoritativa dei dati; i valori discussi in questa sezione ne rappresentano un estratto fedele. Di seguito le specifiche dell'ambiente di test:
+
+\begin{itemize}
+  \item \textbf{Sistema operativo:} Windows 11 (10.0.26200-SP0)
+  \item \textbf{Interprete:} Python 3.14.3
+  \item \textbf{Libreria crittografica:} pyca/cryptography 50.0.1
+  \item \textbf{Test runner:} \texttt{pytest} 9.1.1
+  \item \textbf{Misurazione del tempo:} \texttt{time.perf\_counter}
+  \item \textbf{Trasporto di rete:} Chiamate \emph{in-process} (escludendo deliberatamente la latenza di rete per isolare il solo costo computazionale)
+  \item \textbf{Hardware:} Macchina portatile per sviluppo (ambiente non isolato)
+\end{itemize}
+
+I valori assoluti variano tra diverse esecuzioni. L'obiettivo dell'analisi è validare gli ordini di grandezza e gli andamenti relativi degli algoritmi, non fornire stime prestazionali per un ambiente di produzione.
 
 \subsection{Costo delle primitive crittografiche}
 \label{subsec:wp4_primitive_tempi}
@@ -324,15 +453,12 @@ Verifica hash chain ($n=2000$)   & 10   & 101,270 & 5,123  \\
 \end{tabular}
 \end{center}
 
-Il profilo delle primitive evidenzia tre ordini di grandezza separati. La
-generazione di chiavi RSA-2048 è di gran lunga l'operazione più costosa
-($\approx 46$~ms), con varianza elevata dovuta al test di primalità probabilistico;
-è l'unica eseguita una volta per sessione di voto (Fase~1). La verifica RSA-PSS è
-circa 18 volte più rapida della firma ($0{,}033$~ms vs $0{,}592$~ms): questa
-asimmetria rende economica la verifica pubblica per singolo blocco, pur non
-trascurabile su $n$ blocchi. SHA-256 è di quattro ordini di grandezza più rapido
-del keygen: il costo del protocollo è dominato dalle operazioni RSA, non
-dall'hashing.
+\paragraph{Analisi del profilo prestazionale.} I risultati delineano tre distinti ordini di grandezza:
+\begin{itemize}
+  \item \textbf{Lento ($\approx 46$~ms):} La generazione di chiavi RSA-2048, caratterizzata da un'alta varianza dovuta alla natura probabilistica del test di primalità.
+  \item \textbf{Medio ($\approx 0{,}6$~ms):} Le operazioni crittografiche che impiegano l'esponente privato (\emph{decrypt} e \emph{sign}).
+  \item \textbf{Veloce ($< 0{,}03$~ms):} Le operazioni con esponente pubblico o basate su algoritmi di \emph{hashing} (\emph{encrypt}, \emph{verify}, SHA-256), che risultano da due a quattro ordini di grandezza più veloci rispetto alle precedenti.
+\end{itemize}
 
 \subsection{Tempi di interazione end-to-end (60 elettori)}
 \label{subsec:wp4_e2e}
@@ -352,14 +478,7 @@ Verifica universale \textbf{[VER-2]} (60 record) & 1 & 3,403 & — \\
 \end{tabular}
 \end{center}
 
-La Fase~1 è dominante: la generazione della coppia effimera $PU_v/PR_v$ contribuisce
-per circa 46~ms sui 54~ms totali. La varianza elevata (dev.std~$\approx 38$~ms)
-riflette la variabilità del keygen RSA-2048. Le fasi successive sono di due ordini
-di grandezza più rapide: la firma RSA-PSS (Fase~2,~$0{,}67$~ms) e i cinque
-controlli sequenziali dell'AE con emissione della ricevuta (Fase~3,~$0{,}76$~ms)
-hanno costo modesto. La verifica individuale \textbf{[VER-1]} ($0{,}27$~ms) è
-trascurabile per l'utente; la verifica universale \textbf{[VER-2]} a 60 record
-($3{,}4$~ms) è rapida perché il numero di schede è piccolo.
+\paragraph{Analisi dell'interazione.} La Fase 1 è nettamente dominante in termini di costo computazionale. Nello specifico, la generazione della coppia effimera $PU_v/PR_v$ incide per circa 46~ms sui 54~ms totali richiesti dalla fase, ereditando la marcata varianza tipica del processo di \emph{keygen}. Tutte le fasi di protocollo successive (costruzione, ricezione e verifica) beneficiano di tempistiche ridotte di almeno due ordini di grandezza, rendendo l'esperienza di voto istantanea per l'utente finale.
 
 \subsection{Dimensioni dei messaggi}
 \label{subsec:wp4_dimensioni}
@@ -380,23 +499,15 @@ Merkle proof ($n=60$) & 192 & $32\,\text{B} \times \lceil\log_2 60\rceil = 6$ ha
 \end{tabular}
 \end{center}
 
-Le dimensioni riflettono la serializzazione binaria canonica (DER per le chiavi
-RSA-2048, byte grezzi per digest/ciphertext/firme, $+5$~byte di framing TLV per
-campo). $M$ è la struttura più grande perché include il ciphertext RSA ($256$~B),
-$C_p$ con $PU_v$ DER ($\approx 294$~B) e la firma effimera $\sigma$ ($256$~B). La
-Merkle proof ha dimensione $O(\log n)$: a $n=60$ bastano 6 hash (192~B); tale
-dimensione cresce sub-linearmente con $n$ (\S\ref{sec:wp4_scalabilita}).
+\paragraph{Analisi delle dimensioni} Le dimensionali riflettono fedelmente la serializzazione binaria canonica adottata dal progetto (formato DER per le chiavi RSA-2048, \emph{byte} grezzi per digest/ciphertext/firme, e $5$~byte di \emph{framing} TLV per ogni singolo campo). 
+Il pacchetto $M$ si conferma come la struttura più pesante dell'intero protocollo ($1156$ byte), in quanto racchiude al suo interno il ciphertext RSA ($256$ byte), il certificato $C_p$ contenente il DER di $PU_v$ ($\approx 294$ byte) e la firma effimera $\sigma$ ($256$ byte).
 
 \clearpage
 
 \section{Analisi della scalabilità}
 \label{sec:wp4_scalabilita}
 
-Per valutare le prestazioni a scala universitaria il benchmark costruisce urne
-sintetiche di dimensione crescente e misura separatamente la costruzione del Merkle
-Tree, le prove di inclusione e la verifica universale \textbf{[VER-2]}.
-L'Università di Salerno conta mediamente 30.000--40.000 iscritti; $n = 50.000$ è
-il margine superiore del benchmarking.
+Per valutare l'effettiva scalabilità del sistema in un contesto accademico, lo scenario di benchmark costruisce urne sintetiche di dimensione crescente, cronometrando separatamente la costruzione del Merkle Tree, l'estrazione/verifica delle prove di inclusione e la verifica universale \textbf{[VER-2]}. L'Università di Salerno conta mediamente 30.000--40.000 iscritti; pertanto, il valore $n = 50.000$ è stato scelto come margine superiore (\emph{stress test}) per l'analisi.
 
 \begin{center}
 \small
@@ -418,239 +529,165 @@ il margine superiore del benchmarking.
 \end{tabular}
 \end{center}
 
-\paragraph{Merkle proof: $O(\log n)$.}
-Il numero di hash nella prova cresce come $\lceil\log_2 n\rceil$: da 9 ($n=500$) a
-16 ($n=50.000$), un incremento di soli 7 elementi su tre decadi. La verifica
-individuale \textbf{[VER-1]} richiede $0{,}27$~ms indipendentemente da $n$ (il
-Merkle Tree non è ricostruito per intero lato elettore): per il singolo votante la
-proprietà è scalabile a qualsiasi dimensione elettorale.
+\paragraph{Analisi della Complessità Computazionale}
+I risultati confermano l'efficienza strutturale dell'architettura:
 
-\paragraph{Verifica universale: $O(n)$.}
-\textbf{[VER-2]} cresce linearmente con $n$, dominata dalla verifica di $n$ firme
-RSA-PSS (una per blocco di catena: $n \times 0{,}033$~ms). Alla scala operativa di
-UniSA ($n = 30.000$--$40.000$) il tempo di verifica è nell'intervallo $1{,}6$--$2{,}4$
-secondi. Questo costo è accettabile: \textbf{[VER-2]} è un'operazione
-\emph{una-tantum} eseguita a elezione chiusa da un verificatore indipendente, fuori
-dal percorso di voto. Il limite $O(n)$ è già riconosciuto come rischio residuo
-accettato in WP3 (\ref{subsec:3.3.7_limite_ver2}); l'implementazione lo conferma
-quantitativamente.
+\begin{itemize}
+  \item \textbf{Merkle proof --- $O(\log n)$:} La dimensione della prova crittografica cresce in modo strettamente logaritmico, seguendo l'andamento $\lceil\log_2 n\rceil$. Il numero di hash necessari passa da 9 (a $n=500$) ad appena 16 (a $n=50.000$); un incremento di soli 7 elementi a fronte di una popolazione elettorale cresciuta di due ordini di grandezza. Generazione e verifica si mantengono stabilmente nell'ordine delle decine di microsecondi, garantendo che la verifica individuale resti istantanea e scalabile a qualsiasi dimensione elettorale.
+  
+  \item \textbf{Verifica universale --- $O(n)$:} Come prevedibile, \textbf{[VER-2]} cresce in modo lineare rispetto a $n$. Il tempo di esecuzione è dominato computazionalmente dalla verifica delle $n$ firme RSA-PSS (una per ogni blocco della catena). Tuttavia, anche lavorando alla scala operativa massima stimata per UniSA ($n = 30.000$--$40.000$), l'audit crittografico completo si conclude in un arco di tempo estremamente contenuto, compreso tra $1{,}6$ e $2{,}4$ secondi.
+  
+  \item \textbf{Costruzione Merkle Tree --- $O(n)$ a costo residuale:} Pur avendo una complessità lineare (una singola operazione SHA-256 per nodo), la costruzione dell'albero vanta un coefficiente costante estremamente ridotto. A $n=40.000$ l'operazione richiede appena $118$~ms, incidendo per meno del 5\% sul costo totale di \textbf{[VER-2]}. Non rappresenta, pertanto, alcun collo di bottiglia per le prestazioni del sistema.
+\end{itemize}
 
-\paragraph{Costruzione Merkle Tree: $O(n)$, costo residuale.}
-La costruzione è $O(n)$ (un passo SHA-256 per nodo), ma il coefficiente è piccolo:
-$\approx 118$~ms a $n=40.000$, meno del 5\% del costo totale di \textbf{[VER-2]}.
-Non è un collo di bottiglia.
+\clearpage
+
+\section{Discussione dei risultati}
+\label{sec:wp4_discussione}
+
+L'analisi dei dati raccolti nel benchmark permette di trarre le seguenti conclusioni sulle prestazioni e sull'architettura del protocollo:
+
+\paragraph{Il costo computazionale è dominato da RSA.} Le operazioni basate su \emph{hashing} (SHA-256 e Merkle Tree) hanno un impatto prestazionale trascurabile, risultando quattro ordini di grandezza più rapide rispetto alla generazione di chiavi RSA-2048. Il carico computazionale del sistema risiede interamente nelle operazioni RSA con esponente privato (\emph{keygen}, \emph{decrypt}, \emph{sign}) e nel loro accumulo iterativo su $n$ blocchi.
+
+\paragraph{Il \emph{keygen} effimero come collo di bottiglia.} Durante la Fase 1, la generazione della coppia $PU_v/PR_v$ assorbe circa 46~ms sui 54~ms totali misurati. Al contrario, le firme, i cinque controlli dell'AE e l'emissione della ricevuta si completano in meno di un millisecondo. Essendo l'unica operazione onerosa, va notato che in un dispiegamento reale essa verrebbe delegata \emph{client-side} al dispositivo dell'elettore (e potenzialmente anticipata rispetto all'apertura delle urne), annullando così ogni impatto sul server centrale.
+
+\paragraph{Asimmetria firma/verifica a vantaggio dell'audit.} La verifica della firma RSA-PSS risulta circa 18 volte più rapida rispetto all'apposizione della stessa ($0{,}033$~ms contro $0{,}592$~ms). Questa asimmetria strutturale è un enorme vantaggio per il protocollo, poiché rende economicamente sostenibile la verifica pubblica universale ammortizzando il costo computazionale iterato su $n$ blocchi.
+
+\paragraph{Sostenibilità della crescita lineare per [VER-2].} Sebbene la verifica universale sia limitata da una complessità $O(n)$ (rischio residuo già accettato in WP3, \ref{subsec:3.3.7_limite_ver2}), l'implementazione dimostra quantitativamente che tale crescita è innocua. Alla scala d'Ateneo ($n = 40.000$), la validazione completa richiede appena $1{,}6$--$2{,}4$~secondi. Trattandosi di un'operazione \emph{una-tantum}, eseguita a elezione chiusa e \emph{offline}, non interferisce con il sistema. Di contro, la verifica individuale \textbf{[VER-1]} --- che l'elettore esegue attivamente e in tempo reale --- gode di una ben più rapida complessità $O(\log n)$.
+
+\paragraph{Sostenibilità architetturale complessiva.} Nel percorso critico del voto (\emph{critical path}: autenticazione, costruzione della scheda, ricezione della ricevuta, verifica dell'inclusione), nessuna operazione successiva al \emph{keygen} supera la soglia di pochi millisecondi. I processi il cui costo scala con l'affluenza (costruzione dell'albero, verifica della catena, scrutinio) restano nell'ordine dei secondi anche a $n = 40.000$ e sono eseguiti esternamente al flusso di voto utente. 
+
+Alla luce di questi dati, si conclude che per lo scenario universitario di riferimento il prototipo è pienamente sostenibile. Le inevitabili limitazioni del modello di test (esecuzione su macchina non isolata, assenza di latenza di rete e di I/O su disco) sono discusse analiticamente nella sezione (\ref{sec:wp4_limiti}).
 
 \clearpage
 
 \section{Minacce neutralizzate: implementazione e modello di minaccia}
 \label{sec:wp4_minacce}
 
-Per ognuno dei sette profili avversariali del modello di minaccia di WP1
-(\ref{sec:1.5_threat_model}), questa sezione indica i vettori d'attacco, il
-meccanismo implementativo che li neutralizza o li rende rilevabili, e i limiti
-dichiarati come rischio residuo. La copertura completa è nello script
-\texttt{use\_cases/adversary\_cases.py} (21 vettori verificati su 21). I
-riferimenti a WP3 indicano l'analisi teorica corrispondente.
+Per ognuno dei sette profili avversariali definiti nel modello di minaccia di WP1 (\S\ref{sec:1.5_threat_model}), questa sezione mappa i vettori d'attacco con il preciso meccanismo implementativo che li neutralizza (o li rende rilevabili), esplicitando eventuali limiti classificati come "rischio residuo".
+La copertura completa di questi scenari è automatizzata e validata dallo script \texttt{use\_cases/adversary\_cases.py} (21 vettori verificati su 21). I riferimenti a WP3 indicano l'analisi teorica corrispondente.
 
 \subsection{Avversario di Rete (Man-in-the-Middle)}
 \label{subsec:wp4_avv_mitm}
+\emph{Riferimento WP3:} \ref{subsec:3.2.1_mitm}.
 
-\emph{Riferimento WP3}: \ref{subsec:3.2.1_mitm}.
-
-\paragraph{Alterazione attiva del pacchetto in transito.}
-In \texttt{election.py}, \texttt{cast\_vote()} serializza $M$ in byte grezzi e
-consente l'iniezione di un \emph{tamper} che modifica arbitrariamente il payload
-prima della ricezione dall'AE. Qualsiasi modifica al ciphertext o alla struttura
-di $M$ invalida la firma effimera $\sigma$ (Controllo~5 in
-\texttt{receive\_ballot}): il pacchetto è rifiutato senza ricevuta e $PR_v$ non è
-cancellato — l'elettore conserva la possibilità di ritrasmettere.
-
-\paragraph{Ritrasmissione esatta del pacchetto.}
-Un pacchetto $M$ ritrasmesso identicamente è bloccato al Controllo~3: $PU_v$ è già
-in \texttt{\_ephemeral\_register}.
-
-\paragraph{Riuso del nonce con certificato diverso.}
-Costruito artificialmente in \texttt{adversary\_cases.py} (elettore~B riusa il
-nonce $\eta$ di elettore~A): bloccato al Controllo~4 (anti-replay di $\eta$ in
-\texttt{\_nonce\_register}), distinto e indipendente dal controllo di unicità del
-certificato al Controllo~3.
-
-\paragraph{Rischio residuo.}
-La riservatezza dei dati in transito è assunta (canale TLS), non dimostrata dal
-codice (\ref{subsec:3.3.4_limite_sec1}).
+\begin{itemize}
+  \item \textbf{Alterazione attiva del pacchetto in transito:} In \texttt{election.py}, il metodo \texttt{cast\_vote()} serializza $M$ in byte grezzi, consentendo l'iniezione simulata di un \emph{tamper} che ne modifica il payload prima della ricezione. Qualsiasi alterazione al ciphertext o alla struttura invalida la firma effimera $\sigma$ (Controllo 5 in \texttt{receive\_ballot}). Il pacchetto viene rifiutato senza emissione di ricevuta e $PR_v$ non viene cancellato, preservando la capacità dell'elettore di ritrasmettere il voto.
+  \item \textbf{Ritrasmissione esatta del pacchetto:} Un pacchetto $M$ ritrasmesso in modo identico viene bloccato dal Controllo 3, poiché la chiave $PU_v$ risulta già iscritta nel \texttt{\_ephemeral\_register}.
+  \item \textbf{Riuso del nonce con certificato diverso:} Se un Elettore B tenta di riutilizzare il nonce $\eta$ di un Elettore A, l'attacco viene bloccato dal Controllo 4 (anti-replay di $\eta$ tramite \texttt{\_nonce\_register}). Questo meccanismo è strutturalmente distinto e indipendente dal controllo di unicità del certificato (Controllo 3).
+  \item \textbf{Rischio residuo (Riservatezza in transito):} La confidenzialità dei dati in transito è assunta come prerequisito architetturale (es. canale TLS) e non viene dimostrata direttamente dal codice crittografico del pacchetto (\ref{subsec:3.3.4_limite_sec1}).
+\end{itemize}
 
 \subsection{Attaccante DoS (Denial of Service)}
 \label{subsec:wp4_avv_dos}
+\emph{Riferimento WP3:} \ref{subsec:3.2.2_dos}.
 
-\emph{Riferimento WP3}: \ref{subsec:3.2.2_dos}.
-
-\paragraph{Interruzione prima della ricevuta.}
-Se un pacchetto non raggiunge l'AE (o la ricevuta è persa prima della verifica
-dell'elettore), $PR_v$ non è cancellato (la cancellazione avviene solo in
-\texttt{process\_receipt}, dopo la verifica di $\mathrm{Sign}_{PR_{AE}}(R)$).
-L'elettore può ritrasmettere con un nuovo $\eta$ e lo stesso $C_p$; se la prima
-trasmissione non è stata registrata dall'AE, la seconda è accettata normalmente.
-
-\paragraph{Integrità storica dopo un'interruzione.}
-La hash chain dei record già pubblicati rimane intatta e verificabile: la verifica
-universale su un'urna parziale è positiva.
-
-\paragraph{Rischio residuo.}
-La saturazione volumetrica delle risorse (flood) è affidata alle difese di rete
-d'Ateneo; non altera l'esito né la segretezza del voto.
+\begin{itemize}
+  \item \textbf{Interruzione prima della ricevuta:} Se un pacchetto non raggiunge l'AE (o se la ricevuta va persa prima della verifica locale), la chiave $PR_v$ non viene cancellata (l'eliminazione avviene solo in \texttt{process\_receipt}, previo superamento di $\mathrm{Sign}_{PR_{AE}}(R)$). L'elettore può quindi ritrasmettere il voto generando un nuovo $\eta$ e riutilizzando lo stesso $C_p$.
+  \item \textbf{Integrità storica dopo un'interruzione:} La \emph{hash chain} dei record già pubblicati rimane crittograficamente intatta e verificabile; la verifica universale eseguita su un'urna parziale restituisce esito positivo.
+  \item \textbf{Rischio residuo (Saturazione):} La saturazione volumetrica delle risorse (\emph{flood}) è demandata per intero alle difese di rete perimetrali dell'Ateneo; tale attacco degrada la disponibilità ma non può alterare né l'esito né la segretezza del voto.
+\end{itemize}
 
 \subsection{Falsario}
 \label{subsec:wp4_avv_falsario}
+\emph{Riferimento WP3:} \ref{subsec:3.2.3_falsario}.
 
-\emph{Riferimento WP3}: \ref{subsec:3.2.3_falsario}.
-
-Un $C_p$ contraffatto con una chiave SA arbitraria (generata al volo in
-\texttt{adversary\_cases.py}) non supera il Controllo~2: la verifica di
-$\mathrm{Sign}_{PR_{SA}}$ usa $PU_{SA}$ autentica, distribuita dalla PKI simulata.
-Ogni pacchetto privo di un certificato emesso dal SA legittimo è scartato
-immediatamente, prima di qualsiasi operazione costosa.
+\begin{itemize}
+  \item \textbf{Contraffazione del certificato di abilitazione ($C_p$):} Un certificato $C_p$ generato con una chiave arbitraria non supera il Controllo 2: la verifica di $\mathrm{Sign}_{PR_{SA}}$ esige l'impiego della chiave pubblica $PU_{SA}$ autentica, distribuita dalla PKI. Ogni pacchetto privo di un certificato legittimo viene scartato a monte, prima di avviare qualsiasi operazione computazionalmente onerosa.
+\end{itemize}
 
 \subsection{Elettore Disonesto (Impostore)}
 \label{subsec:wp4_avv_elettore}
+\emph{Riferimento WP3:} \ref{subsec:3.2.4_elettore_disonesto}.
 
-\emph{Riferimento WP3}: \ref{subsec:3.2.4_elettore_disonesto}.
-
-\paragraph{Secondo voto con lo stesso $C_p$.}
-Controllo~3 in \texttt{receive\_ballot}: $PU_v$ già in \texttt{\_ephemeral\_register}.
-
-\paragraph{Seconda richiesta di certificato per la stessa identità.}
-\texttt{AuthServer.request\_challenge} e \texttt{issue\_certificate} verificano
-entrambi che \texttt{subject\_id} non sia già in \texttt{\_identity\_register}:
-un doppio tentativo riceve \texttt{AuthError} prima dell'emissione.
-
-\paragraph{Impersonamento (proof-of-possession invalida).}
-La challenge emessa dal SA è firmata dall'elettore con $PR_v$; se la firma è
-prodotta con una chiave diversa da $PU_v$ dichiarata, la verifica
-$\mathrm{Sign}_{PR_v}(H(\text{nonce}))$ in \texttt{issue\_certificate} fallisce e
-il certificato non è emesso.
-
-\paragraph{Scheda fuori dominio.}
-Una preferenza $i > N$ è accettata alla ricezione (l'AE non decifra durante la
-fase aperta: principio \emph{authenticate before decrypt}); a scrutinio, la
-decifratura produce un valore fuori range e l'AE inserisce un $\mathit{Invalid}_j$
-firmato con \texttt{motivo~=~"OUT\_OF\_RANGE"}, verificabile pubblicamente da
-\textbf{[VER-2]}.
-
-\paragraph{Ricevuta rivelante.}
-La struttura di $R$ contiene soltanto $K_j$, $F_j$, $j$ e $id_{\text{elezione}}$:
-nessun campo rivela la preferenza né il fattore $r$. $PR_v$ è cancellato
-\emph{dopo} la verifica di $\mathrm{Sign}_{PR_{AE}}(R)$ in
-\texttt{process\_receipt}: una volta completata la sessione, l'elettore non può
-dimostrare a un terzo quale preferenza ha espresso.
+\begin{itemize}
+  \item \textbf{Secondo voto con lo stesso $C_p$:} Bloccato dal Controllo 3 in \texttt{receive\_ballot} (la chiave $PU_v$ risulta già consumata e presente tra gli effimeri).
+  \item \textbf{Seconda richiesta di $C_p$ per la stessa identità:} I metodi del SA (\texttt{request\_challenge} e \texttt{issue\_certificate}) verificano rigorosamente che il \texttt{subject\_id} non figuri già nel \texttt{\_identity\_register}. Un doppio tentativo genera un \texttt{AuthError} bloccando l'emissione.
+  \item \textbf{Impersonamento (Proof-of-possession invalida):} Se la \emph{challenge} del SA viene firmata con una chiave privata discordante dalla $PU_v$ dichiarata, la validazione $\mathrm{Sign}_{PR_v}(H(\text{nonce}))$ fallisce e il SA nega il certificato.
+  \item \textbf{Scheda fuori dominio:} Una preferenza $i > N$ supera temporaneamente i controlli di ricezione in virtù del principio \emph{authenticate before decrypt}. In fase di scrutinio, l'anomalia emerge: l'AE non scarta il record, ma accoda pubblicamente un $\mathit{Invalid}_j$ firmato con \texttt{motivo~=~"OUT\_OF\_RANGE"}, rilevabile da \textbf{[VER-2]}.
+  \item \textbf{Richiesta di ricevuta rivelante:} La struttura di $R$ espone unicamente $K_j$, $F_j$, $j$ e $id_{\text{elezione}}$; nessun campo rivela la preferenza o il fattore randomico $r$. Poiché $PR_v$ viene distrutta dopo la validazione di $R$, l'elettore è materialmente impossibilitato a dimostrare a terzi la preferenza espressa.
+\end{itemize}
 
 \subsection{Coercitore}
 \label{subsec:wp4_avv_coercitore}
+\emph{Riferimento WP3:} \ref{subsec:3.2.5_coercitore}.
 
-\emph{Riferimento WP3}: \ref{subsec:3.2.5_coercitore}.
-
-Dopo il voto, \texttt{Voter.ephemeral\_private\_key\_wiped} è \texttt{True}: $PR_v$
-è eliminato dalla memoria Python; il fattore $r$ non è mai stato esposto. Senza
-$PR_v$ né $r$ l'elettore non può ricalcolare $C$ a partire da $i$: non esiste
-prova che consenta di dimostrare a un coercitore quale preferenza è stata cifrata.
-
-\paragraph{Rischio residuo.}
-La coercizione fisica al momento del voto (presenza del coercitore durante la
-compilazione della scheda elettronica) non ha contromisure tecniche nel modello
-irrevocabile \emph{one-shot} (\ref{subsec:3.3.6_vulnerabilita_coercizione}).
+\begin{itemize}
+  \item \textbf{Protezione dalla coercizione retroattiva / voto di scambio:} Al termine delle operazioni (\texttt{ephemeral\_private\_key\_wiped = True}), $PR_v$ viene eliminata in modo sicuro dalla memoria Python e il fattore $r$ (gestito internamente dalla libreria) non viene mai esposto. Privato di $PR_v$ e $r$, l'elettore non può matematicamente ricalcolare $C$ a partire da $i$, neutralizzando le pretese del coercitore.
+  \item \textbf{Rischio residuo (Coercizione fisica):} La presenza fisica del coercitore durante la compilazione della scheda elettronica non ammette contromisure tecniche in un modello irrevocabile \emph{one-shot} (\ref{subsec:3.3.6_vulnerabilita_coercizione}).
+\end{itemize}
 
 \subsection{SA Disonesto}
 \label{subsec:wp4_avv_sa}
+\emph{Riferimento WP3:} \ref{subsec:3.2.6_sa_disonesto}.
 
-\emph{Riferimento WP3}: \ref{subsec:3.2.6_sa_disonesto}.
-
-\paragraph{De-anonimizzazione per correlazione temporale.}
-Con la pubblicazione per finestre (\ref{subsec:wp4_urna}) i $\mathit{VoteRecord}$
-non compaiono nell'urna all'istante della sottomissione: il test in
-\texttt{adversary\_cases.py} verifica che, dopo 4 voti con \texttt{window\_size=100},
-la catena pubblica non contenga ancora alcun $\mathit{VoteRecord}$ e i record siano
-in attesa nel buffer dell'AE.
-
-\paragraph{Abilitazione di identità fittizie (\emph{phantom voting}).}
-L'accettazione di un $C_p$ è subordinata alla firma del SA autentico (Controllo~2).
-Il vincolo pubblico $k_{\text{totale}} \le \texttt{sa.issued\_count()}$ è
-verificabile al termine dell'elezione: un numero di schede superiore ai certificati
-legittimamente emessi rivelerebbe l'abuso.
-
-\paragraph{Rischio residuo.}
-L'esclusione arbitraria di un avente diritto (omettere l'emissione di un $C_p$
-lecito) è rilevabile solo dai log d'Ateneo; è fuori dal perimetro crittografico del
-protocollo (\ref{subsec:3.3.1_vincolo_auth1}).
+\begin{itemize}
+  \item \textbf{De-anonimizzazione per correlazione temporale:} La pubblicazione differita per finestre (\S\ref{subsec:wp4_urna}) garantisce che i $\mathit{VoteRecord}$ non appaiano nell'urna nell'esatto istante della sottomissione. I test confermano che, con \texttt{window\_size=100}, dopo 4 voti la catena pubblica resta invariata, celando l'attività nel buffer dell'AE.
+  \item \textbf{Abilitazione di identità fittizie (\emph{Phantom voting}):} Qualsiasi $C_p$ fittizio necessita della firma dell'SA (Controllo 2). L'abuso verrebbe esposto a posteriori dal vincolo pubblico $k_{\text{totale}} \le \texttt{sa.issued\_count()}$: un numero di schede eccedente i certificati leciti emessi farebbe scattare l'allarme amministrativo.
+  \item \textbf{Rischio residuo (Esclusione arbitraria):} L'omissione dolosa dell'emissione di un $C_p$ legittimo sfugge al perimetro crittografico e risulta accertabile esclusivamente tramite l'ispezione dei log SSO d'Ateneo (\ref{subsec:3.3.1_vincolo_auth1}).
+\end{itemize}
 
 \subsection{AE Disonesta}
 \label{subsec:wp4_avv_ae}
-
-\emph{Riferimento WP3}: \ref{subsec:3.2.7_ae_disonesta}.
-
-\paragraph{Decifratura anticipata delle schede.}
-\texttt{activate\_tally\_key()} verifica che l'urna sia chiusa e che
-$\texttt{clock()} \ge t_{\text{chiusura}}$; altrimenti lancia \texttt{TallyKeyError}.
-$PR_{ele}$ non è mai nel costruttore di \texttt{ElectoralAuthority}.
-
-\paragraph{Alterazione retroattiva della hash chain.}
-Qualsiasi modifica a un $\mathit{Record}_j$ già pubblicato invalida la firma AE sul
-blocco modificato e/o il puntatore hash del blocco successivo: \textbf{[VER-2]} è
-negativa.
-
-\paragraph{Rimozione o iniezione di record.}
-La rimozione di un blocco rompe la catena degli hash pointer; l'iniezione di un
-blocco firmato con una chiave diversa non supera la verifica delle firme AE su ogni
-blocco. Entrambe le manomissioni rendono la verifica universale negativa.
-
-\paragraph{Merkle Root priva della co-firma SA.}
-\texttt{verify\_universal()} controlla \texttt{root.verify\_ae(pu\_ae) and
-root.verify\_sa(pu\_sa)} su ogni Root pubblicata: la mancanza di anche una sola
-firma rende \textbf{[VER-2]} negativa.
-
-\paragraph{Documento finale con Merkle Root incoerente.}
-La radice nel $\mathit{Doc}_{\text{finale}}$ è incrociata con quella ricalcolata
-dai $\mathit{VoteRecord}$ della catena; qualsiasi discrepanza è rilevata da
-\textbf{[VER-2]}.
-
-\paragraph{Manipolazione del conteggio a scrutinio.}
-Questo è il limite strutturale riconosciuto in WP2 (\ref{subsec:wp2_limite_sec1})
-e WP3 (\ref{subsec:3.3.2_limite_int2}): il verificatore pubblico non può
-accertare che l'AE abbia decifrato e conteggiato ogni $C_j$ onestamente. Il vincolo
-pubblico residuo è la coerenza numerica
-$k_{\text{conformi}}+k_{\text{invalide}}=k_{\text{totale}}$ nel
-$\mathit{Doc}_{\text{finale}}$, verificata da \textbf{[VER-2]}.
-
-\section{Suite di test}
-\label{sec:wp4_test}
-
-La suite \texttt{pytest} comprende \textbf{59 test, tutti verdi}:
+\emph{Riferimento WP3:} \ref{subsec:3.2.7_ae_disonesta}.
 
 \begin{itemize}
-  \item \emph{Happy path} e completezza (\ref{sec:1.7_completeness}): 6~test
-    su elezioni complete, con \textbf{[VER-1]} e \textbf{[VER-2]} positivi.
-
-  \item Resilienza al modello di minaccia: 18~test sui vettori avversariali di
-    \ref{sec:wp4_minacce} — finestra temporale prima di $t_{\text{apertura}}$ e
-    dopo $t_{\text{chiusura}}$; MITM sui byte serializzati (flip di un bit);
-    replay esatto; anti-replay sul nonce distinto dall'unicità di $PU_v$; doppio
-    voto; doppia richiesta di certificato; $C_p$ contraffatto; proof-of-possession
-    invalida; $id_{\text{elezione}}$ incoerente; scheda fuori range, non decifrabile,
-    con plaintext malformato (record $\mathit{Invalid}_j$ con i tre codici
-    \emph{motivo}); $PR_{ele}$ non attivabile prima della chiusura.
-
-  \item Test negativi sulle verifiche di integrità: 13~test su record
-    modificato/rimosso/iniettato, firma AE contraffatta, Merkle Root incoerente
-    con il $\mathit{Doc}_{\text{finale}}$, Root priva della co-firma SA, doppio
-    $\mathit{Invalid}_j$ per lo stesso $j$.
-
-  \item Proprietà del Merkle Tree: 22~test — \emph{roundtrip} delle prove su
-    tutti gli indici per $n \in \{1,\ldots,100\}$; lunghezza logaritmica;
-    correttezza della costruzione con duplicazione e chiusura dell'ambiguità a
-    livello di protocollo; iniettività della serializzazione TLV.
+  \item \textbf{Decifratura anticipata delle schede:} Il metodo \texttt{activate\_tally\_key()} agisce da guardia invalicabile: verifica che l'urna sia formalmente chiusa e che $\texttt{clock()} \ge t_{\text{chiusura}}$, altrimenti lancia un \texttt{TallyKeyError}. Inoltre, la chiave $PR_{ele}$ non fa mai parte dello stato iniziale dell'AE.
+  \item \textbf{Alterazione retroattiva della \emph{hash chain}:} La manomissione di un $\mathit{Record}_j$ pubblicato rompe inesorabilmente la firma dell'AE su quel blocco o ne invalida l'hash pointer successivo, causando il fallimento di \textbf{[VER-2]}.
+  \item \textbf{Rimozione o iniezione di record:} Analogamente, l'aggiunta di record non firmati dall'AE legittima o la rimozione di un blocco spezzano l'integrità sequenziale della catena (fallimento di \textbf{[VER-2]}).
+  \item \textbf{Merkle Root priva della co-firma SA:} La verifica universale impone rigorosamente \texttt{root.verify\_ae(pu\_ae) and root.verify\_sa(pu\_sa)}. L'assenza o la compromissione di una sola firma rende invalido il controllo \textbf{[VER-2]}.
+  \item \textbf{Documento finale con Merkle Root incoerente:} La discrepanza tra la radice dichiarata nel $\mathit{Doc}_{\text{finale}}$ e quella ricalcolata in modo indipendente dai $\mathit{VoteRecord}$ espone immediatamente il tentativo di frode durante l'audit di \textbf{[VER-2]}.
+  \item \textbf{Rischio residuo (Manipolazione a scrutinio in corso):} In linea con i limiti strutturali riconosciuti in WP2 (\ref{subsec:wp2_limite_sec1}) e WP3 (\S\ref{subsec:3.3.2_limite_int2}), non esiste garanzia crittografica che prevenga una decifratura e un conteggio disonesto da parte dell'AE \emph{a porte chiuse}. A tutela di questo scenario, l'unica barriera logica resta l'equazione di coerenza numerica ($k_{\text{conformi}}+k_{\text{invalide}}=k_{\text{totale}}$) trascritta nel $\mathit{Doc}_{\text{finale}}$ e sottoposta a \textbf{[VER-2]}.
 \end{itemize}
 
-Oltre ai test, due script eseguibili: \texttt{wp4/main.py} (happy path completo,
-exit~0 se \textbf{[VER-1]} e \textbf{[VER-2]} positivi) e
-\texttt{use\_cases/adversary\_cases.py}, che percorre i sette profili avversariali
-mostrando per ciascuno i vettori neutralizzati, i vincoli pubblici che
-esporrebbero l'abuso di un \emph{insider} e i limiti dichiarati come rischio
-residuo (21 vettori verificati su 21).
+
+\section{Limiti dell'implementazione}
+\label{sec:wp4_limiti}
+
+Il prototipo sviluppato deve essere interpretato come una \emph{simulazione controllata}: il suo scopo primario è verificare il corretto collegamento operativo delle fasi crittografiche e misurarne il costo computazionale, non riprodurre l'intera infrastruttura di un sistema reale. I limiti di questa simulazione si dividono in tre categorie principali.
+
+\subsection{Elementi simulati e assunzioni infrastrutturali}
+\label{subsec:wp4_simulati}
+
+\begin{itemize}
+  \item \textbf{Rete e Latenza (RTT):} Le comunicazioni avvengono tramite chiamate \emph{in-process}. I tempi misurati riflettono esclusivamente l'onere di elaborazione CPU, escludendo le fisiologiche latenze di rete. Allo stesso modo, non sono implementati un database persistente né la gestione della concorrenza fra richieste simultanee.
+
+  \item \textbf{Livello di Trasporto (TLS):} La funzione \texttt{open\_tls\_channel()} simula l'autenticazione \emph{server-side} verificando il certificato X.509 contro la CA. Tuttavia, la confidenzialità del \emph{payload} in transito è puramente \emph{assunta}: le proprietà \textbf{[SEC-1]} e \textbf{[SEC-2]} in fase di trasporto rimangono assunzioni teoriche e non garanzie dimostrate dal codice (\ref{subsec:3.3.4_limite_sec1}).
+
+  \item \textbf{Infrastruttura a Chiave Pubblica (PKI/X.509):} La classe \texttt{CertificateAuthority} lega la tupla $(\mathit{subject},\,PU,\,\text{validità})$ con una firma RSA-PSS, verificandone scadenza e autenticità. Non sono però implementate catene di certificati complesse né protocolli di revoca (come CRL o OCSP).
+
+  \item \textbf{Autenticazione d'Ateneo (IdP/OIDC/MFA):} L'\texttt{IdentityProvider} si limita a rilasciare un ID Token firmato contenente un flag booleano per l'MFA. L'effettivo cerimoniale OIDC passo-passo o i protocolli di sicurezza hardware (es. FIDO2/WebAuthn) non sono riprodotti.
+
+  \item \textbf{Custodia \emph{offline} di $PR_{ele}$:} Il \texttt{KeyCustodian} impone il blocco al rilascio della chiave di scrutinio tramite un rigoroso controllo temporale su $t_{\text{chiusura}}$. Poiché un'AE con controllo totale sulla macchina potrebbe aggirare questo blocco, la custodia \emph{offline} si conferma una fondamentale garanzia di natura \emph{procedurale} (\ref{subsec:3.3.2_limite_int2}).
+
+  \item \textbf{Fattore di randomizzazione ($r$):} Essendo gestito internamente dalla libreria \texttt{cryptography} e mai esposto a livello applicativo, il requisito crittografico di non-disponibilità del fattore $r$ di OAEP è soddisfatto per costruzione.
+
+  \item \textbf{Sincronizzazione temporale (Orologio Simulato):} Il componente \texttt{SimClock} viene iniettato nei moduli per consentire test deterministici sulle finestre di voto, senza imporre reali attese orarie. I controlli logici restano invariati, cambia unicamente la sorgente del tempo (tramite \texttt{self.\_clock()} anziché \texttt{time.time()}).
+  
+  \item \textbf{Interfaccia e Deployment:} L'implementazione è volutamente priva di un'interfaccia grafica (UI), di un database persistente e di un'infrastruttura web dedicata. L'intero ciclo di vita dell'elezione è orchestrato tramite script Python eseguiti in locale, i cui risultati vengono stampati a terminale o esportati su file all'interno della directory \texttt{artifacts/}.
+\end{itemize}
+
+\subsection{Scostamenti dalla notazione teorica di WP2}
+\label{subsec:wp4_scostamenti}
+
+Per ragioni di efficienza e sicurezza implementativa, il codice adotta accorgimenti specifici rispetto all'astrazione matematica:
+\begin{itemize}
+  \item \textbf{Implementazione della firma:} La notazione $\mathrm{Sign}_{PR}(H(x))$ è istanziata come $\text{RSA-PSS-Sign}(PR,\,\texttt{wire}(x))$ con funzione interna SHA-256 (un unico passaggio di \emph{hashing}). L'output prodotto mantiene una lunghezza fissa di 256 byte.
+  \item \textbf{Serializzazione TLV:} Tutti i campi firmati adottano una serializzazione canonica \emph{Tag-Length-Value}, che garantisce matematicamente l'iniettività per sequenze a lunghezza variabile come \texttt{lista\_candidati} o \texttt{Risultato}.
+  \item \textbf{Chiusura crittografica degli $\mathit{Invalid}_j$:} A differenza della notazione di base, nel codice il digest firmato di un record invalido include esplicitamente l'hash pointer. Essendo a tutti gli effetti un blocco della catena, tale inclusione impedisce che l'$\mathit{Invalid}_j$ possa essere sganciato e riposizionato altrove senza invalidare la firma.
+  \item \textbf{Firme sulle Merkle Root:} Aderendo strettamente al WP2, l'AE e il SA firmano \emph{esclusivamente} il valore della radice (32 byte). Parametri come \texttt{window\_index} e \texttt{leaf\_count} restano utili metadati di contesto, ma non coperti da firma.
+  \item \textbf{Rappresentazione dei timestamp e dei voti:} I timestamp sono processati come interi (microsecondi \emph{epoch}). Il voto $i$ è serializzato rigorosamente come intero a 4 byte in formato \emph{big-endian} prima dell'applicazione di OAEP, consentendo i controlli \texttt{MALFORMED\_PADDING}, \texttt{OUT\_OF\_RANGE} e \texttt{DECRYPT\_FAILED} in sede di scrutinio.
+\end{itemize}
+
+\subsection{Rischi residui strutturali}
+\label{subsec:wp4_rischi_strutturali}
+
+Come ampiamente dibattuto nel WP3, persistono limiti indipendenti dall'implementazione e intrinseci all'architettura stessa del protocollo:
+\begin{itemize}
+  \item \textbf{Segretezza rispetto all'AE [SEC-1]:} Non impiegando algoritmi omomorfici, l'AE è obbligata a decifrare individualmente ogni ciphertext $C_j$ per calcolare il totale, rendendo la sicurezza dello scrutinio dipendente dal mantenimento del perimetro \emph{black-box} (\ref{subsec:wp2_limite_sec1}).
+  \item \textbf{Verificabilità universale limitata [VER-2]:} L'assenza di Zero-Knowledge Proofs impedisce al Verificatore Pubblico di accertare che l'AE abbia decifrato e conteggiato il voto onestamente. La verifica si limita alla coerenza matematica dei totalizzatori (\ref{subsec:3.3.7_limite_ver2}).
+  \item \textbf{Non-collusione SA/AE [SEC-2]:} Il codice implementa barriere logiche (registri separati, viste di sola lettura), ma l'assenza di collusione tra amministratori di sistema aventi privilegi massimi resta un'assunzione organizzativa.
+  \item \textbf{Coercizione fisica:} Il modello di voto \emph{one-shot} irrevocabile non dispone di contromisure tecniche a tutela di un elettore coartato \emph{prima} e \emph{durante} la sottomissione della scheda (\ref{subsec:3.3.6_vulnerabilita_coercizione}).
+\end{itemize}
+
+Le soluzioni crittografiche necessarie per superare questi limiti strutturali (cifratura omomorfica additiva, decifratura a soglia distribuita, \emph{mix-net} verificabili, \emph{Zero-Knowledge Proofs} o \emph{Blind Signatures}) comportano un \emph{overhead} fuori dal perimetro didattico del corso, e sono state inquadrate come sviluppi futuri (WP2 e WP3). Alla luce di ciò, questo WP4 non si propone come la validazione di un sistema teoricamente invulnerabile, bensì come una verifica sperimentale e operativa delle componenti implementate.
