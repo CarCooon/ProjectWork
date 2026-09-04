@@ -239,27 +239,33 @@ Il \textbf{Verificatore Pubblico} è un attore indipendente e passivo, che può 
         % Flussi informativi
         \draw[arr, bend left=18]
             (elettore) to
-            node[lbl, below] {credenziali}
+            node[lbl, below] {(1) credenziali}
             (sa);
 
         \draw[arr, bend left=18]
             (sa) to
-            node[lbl, above] {token anonimo}
+            node[lbl, above] {(2) token anonimo}
             (elettore);
 
         \draw[arr]
             (elettore) --
-            node[lbl, above] {scheda cifrata\\+ token}
+            node[lbl, above] {(3) scheda cifrata\\+ token}
             (ae);
 
         \draw[arr]
             (ae) --
-            node[lbl, right] {inserisce}
+            node[lbl, right] {(4) inserisce}
             (urna);
 
         \draw[arr]
             (urna) --
-            node[lbl, right] {prove + risultati}
+            node[lbl, right] {(5) prove + risultati}
+            (vp);
+
+        % Verifica individuale: passo opzionale, a discrezione dell'elettore
+        \draw[arr, densely dashed, black!55, bend right=35]
+            (elettore) to
+            node[lbl, text=black!55] {(6) verifica\\(opzionale)}
             (vp);
 
         % Separazione logica SA / AE

@@ -19,6 +19,116 @@ Attraverso questo approccio, il WP3 fornisce la giustificazione della solidità 
 \section{Resilienza rispetto al Modello di Minaccia}
 \label{sec:3.2_resilienza_minacce}
 
+Prima di esaminare singolarmente ciascun profilo avversariale, è utile individuare in quali fasi del protocollo (WP2) le diverse minacce esercitano concretamente la propria azione. Le Figure~\ref{fig:minacce_fase01} e~\ref{fig:minacce_fase23} mappano i profili del Modello di Minaccia (WP1) sulle prime fasi del flusso -- rispettivamente l'autenticazione presso il SA e la costruzione, trasmissione e validazione della scheda -- evidenziando dove ciascun attaccante interviene concretamente. In entrambe le figure il colore identifica la natura della minaccia: nero per le minacce di canale, blu per le minacce esterne, rosso per le minacce interne agli attori onesti, verde per l'unica minaccia fisica. Le sottosezioni seguenti riprendono singolarmente ciascun profilo, dimostrando come le rispettive capacità vengano neutralizzate o limitate dai meccanismi introdotti nel protocollo (WP2).
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\linewidth}{!}{%
+    \begin{tikzpicture}[
+        actor/.style={rectangle, rounded corners=5pt, draw=black!75, line width=1pt,
+            fill=gray!10, text width=2.9cm, align=center, minimum height=1.35cm, font=\small},
+        arr/.style={-{Stealth[length=6pt, width=4pt]}, line width=1pt},
+        lbl/.style={font=\footnotesize, inner sep=2pt, fill=white, align=center},
+        chantag/.style={rectangle, rounded corners=3pt, draw=black!60, line width=0.8pt,
+            fill=white, font=\footnotesize, inner sep=3pt, align=center, text width=1.9cm},
+        leaderarr/.style={-{Stealth[length=4pt,width=3pt]}, line width=0.7pt, black!65},
+        intarr/.style={-{Stealth[length=4pt,width=3pt]}, line width=0.8pt, red!55!black}
+    ]
+        % Attori onesti, ben distanziati per lasciare respiro ai due canali paralleli
+        \node[actor] (sa) at (-4.5,0) {\textbf{SA}\\[2pt] Sistema di\\Autenticazione};
+        \node[actor] (elettore) at (4.5,0) {\textbf{Elettore}};
+
+        \node[fit=(sa), draw=red!55!black, line width=1pt, densely dashed, rounded corners=6pt, inner sep=3pt] {};
+
+        % Doppio canale rettilineo (non archi curvi): elimina qualunque rischio
+        % che l'etichetta collida con l'alone rosso del SA
+        \draw[arr] ($(sa.east)+(0,0.3)$) -- ($(elettore.west)+(0,0.3)$);
+        \node[lbl] at (0,0.8) {token anonimo + $C_p$};
+
+        \draw[arr] ($(elettore.west)+(0,-0.3)$) -- ($(sa.east)+(0,-0.3)$);
+        \node[lbl] at (0,-0.8) {credenziali};
+
+        \node[chantag] (dossa) at (-4.5,2.4) {Attaccante\\DoS};
+        \draw[leaderarr] (dossa.south) -- (sa.north);
+
+        % Il leader dell'Avversario di Rete tocca esplicitamente il canale
+        % "credenziali", scostato dall'etichetta centrale per non toccarla
+        \node[chantag] (mitm) at (-1.8,-2.4) {Avversario\\di Rete};
+        \draw[leaderarr] (mitm.north) -- (-1.8,-0.3);
+
+        \node[chantag, draw=red!55!black] (sadis) at (-4.5,-2.4) {SA\\Disonesto};
+        \draw[intarr] (sadis.north) -- (sa.south);
+    \end{tikzpicture}%
+    }
+    \caption{Fase 0-1 (Autenticazione): il SA Disonesto rappresenta una minaccia interna, in cui l'autorità di autenticazione stessa devia dal comportamento previsto; l'Avversario di Rete agisce invece sul canale elettore-SA, mentre l'Attaccante DoS mira alla disponibilità del SA.}
+    \label{fig:minacce_fase01}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\linewidth}{!}{%
+    \begin{tikzpicture}[
+        actor/.style={rectangle, rounded corners=5pt, draw=black!75, line width=1pt,
+            fill=gray!10, text width=2.9cm, align=center, minimum height=1.35cm, font=\small},
+        arr/.style={-{Stealth[length=6pt, width=4pt]}, line width=1pt},
+        lbl/.style={font=\footnotesize, inner sep=2pt, fill=white, align=center},
+        chantag/.style={rectangle, rounded corners=3pt, draw=black!60, line width=0.8pt,
+            fill=white, font=\footnotesize, inner sep=3pt, align=center, text width=1.9cm},
+        external/.style={rectangle, rounded corners=5pt, draw=blue!55!black, line width=1pt,
+            fill=blue!6, text width=2.4cm, align=center, minimum height=1.0cm, font=\small},
+        physical/.style={rectangle, rounded corners=5pt, draw=green!35!black, line width=1pt,
+            fill=green!6, text width=2.4cm, align=center, minimum height=1.0cm, font=\small},
+        leaderarr/.style={-{Stealth[length=4pt,width=3pt]}, line width=0.7pt, black!65},
+        physarr/.style={-{Stealth[length=5mm,width=2mm]}, line width=0.9pt, green!35!black},
+        blockarr/.style={-{Stealth[length=6pt,width=4pt]}, densely dashed, line width=1pt, blue!55!black}
+    ]
+        \node[actor] (elettore) at (-4.5,0) {\textbf{Elettore}};
+        \node[actor] (ae) at (4.5,0) {\textbf{AE}\\[2pt] Autorità\\Elettorale};
+
+        \node[fit=(elettore), draw=blue!55!black, line width=1pt, densely dashed, rounded corners=6pt, inner sep=3pt] {};
+
+        \draw[arr] (elettore) -- node[lbl, above] {scheda cifrata\\+ token} (ae);
+
+        % Il leader dell'Avversario di Rete tocca il centro esatto del canale:
+        % l'etichetta del canale sta sopra la linea, il leader sale da sotto,
+        % quindi non si sovrappongono mai
+        \node[chantag] (mitm) at (0,-2.3) {Avversario\\di Rete};
+        \draw[leaderarr] (mitm.north) -- (0,0);
+
+        \node[chantag, draw=blue!55!black] (eldis) at (-4.5,-2.3) {Elettore\\Disonesto};
+        \draw[leaderarr, blue!55!black] (eldis.north) -- (elettore.south);
+
+        % Perimetro digitale: confine esplicito. Il terminale sinistro è a
+        % "martello" perché il Coercitore lo attraversa proprio lì, dandogli
+        % un ancoraggio visivo; a destra il tratteggio si lascia sfumare in
+        % modo aperto (il perimetro concettualmente prosegue) invece di
+        % chiudersi su un secondo terminale che non avrebbe nulla vicino.
+        % L'etichetta interrompe la linea esattamente a metà, come nella
+        % convenzione già usata in Figura 1.1 per l'assenza di comunicazione SA-AE
+        \draw[densely dashed, black!55, line width=1pt] (-7.4,-3.3) -- (-1.6,-3.3);
+        \draw[black!55, line width=1pt] (-7.4,-3.5) -- (-7.4,-3.1);
+        \node[font=\footnotesize\itshape, text=black!50, fill=white, inner sep=2pt] at (-4.5,-3.3) {perimetro digitale};
+
+        % Il Coercitore, unica minaccia fisica, attraversa esplicitamente il
+        % perimetro e raggiunge il bordo inferiore (rettilineo, non l'angolo
+        % arrotondato dell'alone) dell'Elettore, su un punto distinto da
+        % quello dell'Elettore Disonesto (che atterra su elettore.south)
+        \node[physical] (coerc) at (-7.0,-4.3) {Coercitore};
+        \draw[physarr] (coerc.north) -- ($(elettore.south)+(-1.3,0)$);
+
+        % Il Falsario tenta l'accesso diretto all'AE (ae.east, distinto da
+        % ae.west usato dal canale legittimo): il tratteggio blu, coerente con
+        % lo stile "esterno" già usato nel resto del diagramma, basta a
+        % segnalare un percorso illegittimo senza bisogno di un'etichetta
+        % separata sull'arco -- il tentativo è già descritto in didascalia
+        \node[external] (fals) at (6.3,-2.3) {Falsario};
+        \draw[blockarr] (fals.north) |- (ae.east);
+    \end{tikzpicture}%
+    }
+    \caption{Fase 2-3 (Costruzione, trasmissione, ricezione, validazione): l'Elettore Disonesto rappresenta lo stesso ruolo assunto da un soggetto malevolo (furto di credenziali, voto multiplo); l'Avversario di Rete agisce sul canale di trasmissione; il Falsario tenta l'accesso diretto all'AE aggirando il SA; il Coercitore agisce nel mondo fisico, fuori dal perimetro digitale, nell'istante della sottomissione.}
+    \label{fig:minacce_fase23}
+\end{figure}
+
 \subsection{Avversario di Rete (Man-in-the-Middle)}
 \label{subsec:3.2.1_mitm}
 
@@ -133,7 +243,7 @@ L'Autorità Elettorale (AE) Disonesta costituisce la minaccia interna (\textit{i
     \item \textbf{Integrità sequenziale e firme:} Se l'AE tentasse di modificare direttamente un record passato all'interno della \textit{hash chain} per far combaciare l'hash, l'effetto valanga della funzione SHA-256 altererebbe il valore $H(Record_j)$ e, di conseguenza, l'hash pointer contenuto in $Record_{j+1}$, invalidando tutte le firme successive. Per nascondere l'azione, l'AE dovrebbe rigenerare e rifirmare l'intera catena fino al blocco di chiusura. Tuttavia, una simile alterazione retroattiva verrebbe immediatamente scoperta dagli elettori onesti tramite la \textit{Verifica Individuale} \textbf{[VER-1]}. L'utente, confrontando il proprio indice progressivo $j$ e il \textit{commitment} ricalcolato con i dati presenti nell'urna pubblica, rileverebbe l'assenza o la modifica del proprio voto, potendo contestarla formalmente esibendo la propria ricevuta $R$. A questa difesa, che dipende dalla partecipazione attiva degli elettori, se ne affianca una indipendente: poiché ogni \textit{Merkle Root} è controfirmata dal SA (come descritto in WP2), l'AE non può presentare agli elettori una versione alternativa e coerente della storia dell'urna senza la complicità del SA. Ciò riduce la dipendenza dalla sola verifica individuale e rafforza l'Immutabilità dell'Urna \textbf{[INT-3]}.
 \end{itemize}
 
-La Figura~\ref{fig:manomissione_hashchain} riassume il percorso dell'attacco appena descritto e i due rilevamenti indipendenti che ne conseguono.
+A differenza delle mappature d'insieme per fase presentate in apertura di questa sezione, qui il percorso viene ricostruito passo per passo: la manomissione retroattiva della hash chain non è un singolo punto d'attacco ma una sequenza di operazioni concatenate, che richiede un livello di dettaglio maggiore rispetto a una semplice indicazione di dove l'attaccante agisce. La Figura~\ref{fig:manomissione_hashchain} riassume il percorso dell'attacco appena descritto e i due rilevamenti indipendenti che ne conseguono.
 
 \begin{figure}[H]
     \centering
