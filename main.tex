@@ -38,9 +38,17 @@
 
 
 % --- Impaginazione ---
-\usepackage[margin=3cm,bindingoffset=0.5cm]{geometry}
+% Margini ridotti rispetto alla versione precedente (era margin=3cm,
+% bindingoffset=0.5cm) per contenere il numero di pagine: 2.2cm resta un
+% margine standard e pienamente leggibile per un elaborato accademico,
+% senza il bindingoffset (non necessario per un documento non rilegato
+% fisicamente).
+\usepackage[margin=2.2cm]{geometry}
 \usepackage{setspace}
-\setstretch{1.2}
+% Interlinea ridotta da 1.2 a 1.05: ancora comoda da leggere, ma
+% sensibilmente più compatta della precedente (1.2 è vicina a una
+% "1.5 righe" in termini di elaboratore di testo).
+\setstretch{1.05}
 \setlength{\parindent}{1cm}
 \raggedbottom
 \usepackage{longtable}
@@ -207,7 +215,28 @@ literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{
 
 % Ora \tableofcontents userà la nostra versione "modificata" di \cleardoublepage
 % e inizierà felicemente sulla pagina 2 (sinistra)
+%
+% Il corpo dell'indice resta a grandezza piena (invariato). Si riduce invece
+% solo lo spazio intorno al titolo "Sommario" (che \tableofcontents genera
+% internamente come \chapter* con \@makeschapterhead): di default lo standard
+% "book" lascia 50pt sopra e 40pt sotto il titolo, più del necessario per
+% recuperare la sola riga che eccedeva. Ridotti a 22pt/18pt, e il titolo
+% stesso di un mezzo passo (da \Huge a \huge) per accompagnare la riduzione
+% dello spazio circostante in modo proporzionato.
+\makeatletter
+\let\old@makeschapterhead\@makeschapterhead
+\renewcommand{\@makeschapterhead}[1]{%
+  \vspace*{22\p@}%
+  {\parindent \z@ \raggedright \normalfont
+    \interlinepenalty\@M
+    \huge\bfseries #1\par\nobreak
+    \vskip 18\p@
+  }}
+\makeatother
 \tableofcontents
+\makeatletter
+\let\@makeschapterhead\old@makeschapterhead
+\makeatother
 
 % 3. Ripristina il comando \cleardoublepage originale
 %    così tutti i capitoli successivi (\input{capitoli...})
@@ -219,16 +248,20 @@ literate={à}{{\`a}}1 {è}{{\`e}}1 {é}{{\'e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{
 
 
 % --- INIZIO DEL CONTENUTO ---
-\cleardoublepage
+% \clearpage invece di \cleardoublepage: i capitoli iniziano sulla pagina
+% successiva senza il vincolo di essere una pagina dispari, evitando le
+% pagine bianche di riempimento (la classe è openany, quindi non c'è un
+% vincolo strutturale a partire da pagina destra).
+\clearpage
 \input{capitoli/wp1}
 
-\cleardoublepage
+\clearpage
 \input{capitoli/wp2}
 
-\cleardoublepage
+\clearpage
 \input{capitoli/wp3}
 
-\cleardoublepage
+\clearpage
 \input{capitoli/wp4}
 
 \end{document}
