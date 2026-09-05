@@ -44,7 +44,7 @@ $R$ & Ricevuta crittografica. & Tupla $(K_j, F_j, j, id_{elezione}, \text{Sign}_
 
 \textbf{Nota sulle firme digitali.} Per aderire correttamente ai requisiti di sicurezza ed evitare le vulnerabilità delle firme RSA applicate direttamente al messaggio, si specifica che le firme digitali del protocollo (come $\sigma$ ed $R$) sono implementate secondo lo schema \textbf{hash-and-sign}. I dati oggetto della firma vengono preventivamente compressi tramite la funzione hash crittografica $H(\cdot)$ (SHA-256), e solo il digest risultante viene firmato tramite la chiave privata RSA. In nessuna fase dell'infrastruttura viene impiegata la firma RSA \textit{textbook} applicata direttamente al dato in chiaro. In tutte le strutture firmate, i campi concatenati prima dell'hash sono codificati in modo univoco (lunghezza fissa o esplicitamente delimitata): per i campi a lunghezza variabile, come \texttt{lista\_candidati} in $Params$ o $Risultato$ in $Doc_{finale}$, questo evita che tuple di campi diverse producano la stessa serializzazione e dunque lo stesso digest firmato.
 
-In ogni struttura firmata del protocollo --- $M$, $R$, $Record_j$, $Invalid_j$, $Doc_{finale}$ --- il digest coperto dalla firma include tutti i campi della tupla tranne la firma stessa: nessun campo mutabile resta fuori dal perimetro firmato. La chiave effimera $PR_v$ firma due strutture distinte nel corso del protocollo (il \textit{nonce} di proof-of-possession in Fase~1 e il pacchetto $M$ in Fase~2): non vi è rischio di confusione tra le due firme, perché al momento della sfida di Fase~1 $C_p$ non è stato ancora emesso, e costruire un \textit{nonce} che collida con $H(C \parallel C_p \parallel \eta \parallel id_{elezione})$ è computazionalmente infattibile.
+In ogni struttura firmata del protocollo --- $M$, $R$, $Record_j$, $Record_{\text{chiusura}}$, $Invalid_j$, $Doc_{finale}$ --- il digest coperto dalla firma include tutti i campi della tupla tranne la firma stessa: nessun campo mutabile resta fuori dal perimetro firmato. La chiave effimera $PR_v$ firma due strutture distinte nel corso del protocollo (il \textit{nonce} di proof-of-possession in Fase~1 e il pacchetto $M$ in Fase~2): non vi è rischio di confusione tra le due firme, perché al momento della sfida di Fase~1 $C_p$ non è stato ancora emesso, e costruire un \textit{nonce} che collida con $H(C \parallel C_p \parallel \eta \parallel id_{elezione})$ è computazionalmente infattibile.
 
 \section{Requisito TLS e limiti rispetto alla traffic analysis}
 \label{sec:wp2_tls}
@@ -719,8 +719,15 @@ Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, 
   i record tramite hash pointer successivi; il \textit{Merkle Tree} (livello superiore) è costruito
   sulle foglie $F_j$ (in blu), estratte dagli stessi record. Le frecce tratteggiate
   indicano che il valore $F_j$ di ogni blocco coincide con la foglia corrispondente
-  nell'albero. La radice è controfirmata da AE e SA; il $Record_{\text{chius.}}$ la incorpora
-  nella catena al momento della chiusura.}
+  nell'albero. La radice è calcolata e controfirmata da AE e SA non appena l'urna si chiude,
+  sull'insieme ormai immutabile dei fingerprint; il $Record_{\text{chius.}}$ la incorpora
+  formalmente nella catena solo al termine della decifratura e della validazione delle schede
+  (Sezione~\ref{subsec:wp2_decifratura_validazione}). La figura raffigura questo secondo momento
+  nel caso privo di schede invalidate, con puntatore $H(Record_n)$; in presenza di invalidazioni
+  il puntatore referenzia invece l'ultimo record $Invalid$ pubblicato. La figura mostra lo stato
+  cumulativo finale dell'albero: in realtà un solo Merkle Tree viene ricostruito e la sua radice
+  ri-firmata dal SA al termine di ogni finestra di pubblicazione, non un albero distinto per blocco
+  (Sezione~\ref{subsec:wp2_merkle_tree}).}
 \label{fig:urna_ibrida}
 \end{figure}
 
@@ -777,14 +784,16 @@ Una blockchain resterebbe una direzione valida solo in scenari puramente \textit
 \subsection{Chiusura e congelamento dell'urna}
 \label{subsec:wp2_chiusura}
 
-Allo scoccare di $t_{chiusura}$ il sistema interrompe l'accettazione di nuovi pacchetti: ogni sottomissione successiva viene respinta. L'AE pubblica quindi un record di chiusura in coda alla hash chain:
+Allo scoccare di $t_{chiusura}$ il sistema interrompe l'accettazione di nuovi pacchetti: ogni sottomissione successiva viene respinta, e il numero $k_{totale}$ di schede accettate risulta da questo istante definitivamente fissato. Nello stesso momento l'AE calcola e pubblica, controfirmata dal SA (Sezione~\ref{subsec:wp2_merkle_tree}), la Merkle Root definitiva sull'insieme --- ormai immutabile --- dei fingerprint $F_j$ delle schede accettate: una scheda inserita abusivamente da questo istante in poi produrrebbe una foglia estranea a tale radice già pubblica e doppiamente firmata, rilevabile dal controllo di Consistenza della Merkle Root in [VER-2] (Sezione~\ref{subsec:wp2_verifica_universale}); per sostituirla con una versione coerente con l'inserimento, l'AE necessiterebbe della complicità del SA, che l'ha già controfirmata.
+
+La formalizzazione di questi valori all'interno della hash chain avviene però solo al termine della decifratura e della validazione di tutte le schede (Sezione~\ref{subsec:wp2_decifratura_validazione}): completata quella fase, l'AE pubblica il record di chiusura, in coda alla catena a quel momento:
 \begin{equation*}
 \begin{split}
-Record_{\text{chiusura}} = \{ & k_{totale},\ \text{MerkleRoot}_{finale},\ H(Record_n),\ \\
-& \text{Sign}_{PR_{AE}}\bigl(H(k_{totale} \parallel \text{MerkleRoot}_{finale} \parallel H(Record_n))\bigr) \}
+Record_{\text{chiusura}} = \{ & k_{totale},\ \text{MerkleRoot}_{finale},\ H(prev),\ \\
+& \text{Sign}_{PR_{AE}}\bigl(H(k_{totale} \parallel \text{MerkleRoot}_{finale} \parallel H(prev))\bigr) \}
 \end{split}
 \end{equation*}
-dove $n$ è l'indice dell'ultima scheda accettata. La firma consolida lo stato dell'urna e rende rilevabile ogni inserimento successivo, secondo lo stesso meccanismo di hash pointer e firma già impiegato per $Record_j$.
+dove $H(prev)$ referenzia l'hash dell'ultimo elemento effettivamente pubblicato nella catena fino a quel momento: $H(Record_n)$, con $n$ indice dell'ultima scheda accettata, se non è stata rilevata alcuna scheda invalida, oppure l'hash dell'ultimo record $Invalid$ pubblicato in caso contrario (Sezione~\ref{subsec:wp2_decifratura_validazione}). La firma consolida lo stato definitivo dell'urna e rende rilevabile ogni inserimento successivo, secondo lo stesso meccanismo di hash pointer e firma già impiegato per $Record_j$.
 
 Si osservi che il protocollo non contempla la sostituzione né l'annullamento di un voto già sottomesso, neppure prima della chiusura: tale scelta (modello \textit{one-shot}) e le relative garanzie crittografiche sono trattate nella Sezione~\ref{subsec:wp2_one_shot_irrevocabile}.
 
@@ -793,9 +802,9 @@ Si osservi che il protocollo non contempla la sostituzione né l'annullamento di
 
 Conclusa la ricezione, l'AE recupera i ciphertext originali $C_j$ dal proprio archivio privato (l'urna pubblica contiene solo i commitment $K_j$, non invertibili) e decifra ciascuna scheda con la chiave dell'elezione:
 $$i_j = \text{RSA-OAEP-Dec}(PR_{ele}, C_j)$$
-Decifrato il voto, l'AE verifica che ricada nell'intervallo consentito ($1 \le i_j \le N$). Una scheda fuori range o malformata non viene rimossa --- ciò corromperebbe la hash chain --- ma etichettata come invalida con un record firmato, accodato alla catena nella finestra successiva:
-$$Invalid_j = \{ id_{elezione},\ j,\ K_j,\ motivo,\ \text{Sign}_{PR_{AE}}(H(id_{elezione} \parallel j \parallel K_j \parallel motivo)) \}$$
-Il campo $motivo$ è un codice di un insieme predefinito (es. \texttt{DECRYPT\_FAILED}, \texttt{OUT\_OF\_RANGE}, \texttt{MALFORMED\_PADDING}), interpretabile da un verificatore automatico. Riferendosi allo stesso $j$ e $K_j$ della scheda originale, il record consente a chiunque scarichi l'urna di associare l'invalidazione e contare correttamente $k_{invalide}$.
+Decifrato il voto, l'AE verifica che ricada nell'intervallo consentito ($1 \le i_j \le N$). Una scheda fuori range o malformata non viene rimossa --- ciò corromperebbe la hash chain --- ma etichettata come invalida con un record firmato, incatenato all'ultimo elemento pubblicato non appena la scheda corrispondente viene processata:
+$$Invalid_j = \{ id_{elezione},\ j,\ K_j,\ motivo,\ H(prev),\ \text{Sign}_{PR_{AE}}(H(id_{elezione} \parallel j \parallel K_j \parallel motivo \parallel H(prev))) \}$$
+dove $H(prev)$ segue la stessa convenzione introdotta per $Record_{\text{chiusura}}$ (Sezione~\ref{subsec:wp2_chiusura}): referenzia l'hash dell'ultimo elemento pubblicato nella catena fino a quel momento, sia esso $Record_n$ --- se questo è il primo record di invalidazione --- o il precedente $Invalid$. In questo modo ogni $Invalid_j$ partecipa alla stessa catena di hash pointer e firme dei record ordinari: una sua rimozione o alterazione successiva romperebbe l'hash pointer del record che lo segue, rendendola rilevabile con lo stesso meccanismo descritto per $Record_j$ (Sezione~\ref{subsec:wp2_hash_chain}). Il campo $motivo$ è un codice di un insieme predefinito (es. \texttt{DECRYPT\_FAILED}, \texttt{OUT\_OF\_RANGE}, \texttt{MALFORMED\_PADDING}), interpretabile da un verificatore automatico. Riferendosi allo stesso $j$ e $K_j$ della scheda originale, il record consente a chiunque scarichi l'urna di associare l'invalidazione e contare $k_{invalide}$ a partire dai record $Invalid$ effettivamente pubblicati nella catena.
 
 Pubblicare l'esito specifico della decifratura, incluso un codice legato al padding, potrebbe far pensare a un canale sfruttabile come un \textit{oracolo di padding}. Non lo è, per due motivi indipendenti: la decifratura avviene esclusivamente a $t_{chiusura}$, quando la sottomissione di nuove schede è già chiusa, e ciascuna identità dispone di un solo $C_p$ e quindi di una sola scheda sottoposta a scrutinio. Un attaccante non dispone perciò delle molte interrogazioni adattive su cui un attacco di questo tipo si basa: l'esito è osservabile una sola volta per identità, a processo di voto già concluso.
 
@@ -807,8 +816,8 @@ $$Risultato[k] = |\{j : i_j = k\}|$$
 I singoli plaintext $i_j$ non vengono pubblicati né ricollegati ai fingerprint $F_j$, a tutela della confidenzialità. L'esito è ufficializzato con un Documento di Scrutinio Finale firmato:
 \begin{equation*}
 \begin{split}
-Doc_{finale} = \{ & Risultato, k_{totale}, k_{conformi}, k_{invalide}, \text{Merkle\_Root}_{finale}, \\
-& \text{Sign}_{PR_{AE}}(H(Risultato \parallel k_{totale} \parallel k_{conformi} \parallel k_{invalide} \parallel \text{Merkle\_Root}_{finale})) \}
+Doc_{finale} = \{ & Risultato, k_{totale}, k_{conformi}, k_{invalide}, \text{MerkleRoot}_{finale}, \\
+& \text{Sign}_{PR_{AE}}(H(Risultato \parallel k_{totale} \parallel k_{conformi} \parallel k_{invalide} \parallel \text{MerkleRoot}_{finale})) \}
 \end{split}
 \end{equation*}
 Il documento espone il conteggio aggregato, le statistiche di regolarità (conformi e invalide) e la Merkle Root, il tutto autenticato dalla firma dell'AE.
@@ -820,8 +829,8 @@ L'architettura non soddisfa in modo assoluto la Segretezza del Voto [SEC-1]: una
 
 Gli strumenti che supererebbero questo limite, eliminando la fiducia riposta nell'autorità centrale, comportano un \textit{overhead} computazionale e infrastrutturale incompatibile con gli obiettivi di efficienza del progetto e fuori dal perimetro del corso:
 \begin{itemize}
-    \item \textbf{Cifratura omomorfica additiva} (es. Paillier, ElGamal esponenziale): consente di combinare i crittogrammi per ottenere direttamente la somma dei voti, così che l'AE decifri solo il risultato aggregato e mai le singole schede.
-    \item \textbf{Decifratura a soglia:} frammenta $PR_{ele}$ tra più entità indipendenti e richiede la cooperazione di un loro sottoinsieme minimo per decifrare, eliminando il \textit{single point of failure} sulla segretezza.
+    \item \textbf{Cifratura omomorfica additiva:} consente di combinare i crittogrammi per ottenere direttamente la somma dei voti, così che l'AE decifri solo il risultato aggregato e mai le singole schede.
+    \item \textbf{Decifratura a soglia:} una condivisione del segreto $(t,n)$ potrebbe frammentare $PR_{ele}$ tra più entità indipendenti, richiedendo la cooperazione di un loro sottoinsieme minimo per decifrare. Una semplice ricostruzione delle quote per eseguire la decifratura, però, ricomporrebbe comunque la chiave intera nel momento dello scrutinio, ripresentando lo stesso \textit{single point of failure} che si vorrebbe eliminare: la garanzia effettiva richiede uno schema di decifratura a soglia che non ricostruisca mai la chiave completa, una primitiva più avanzata di quelle trattate nel corso.
     \item \textbf{Mix-net verificabile:} rimescola e ri-cifra i record fornendo prove di correttezza, recidendo il legame tra il pacchetto immesso dall'elettore e il plaintext ottenuto in fase di scrutinio.
 \end{itemize}
 
@@ -962,7 +971,7 @@ Qualsiasi osservatore esterno può validare l'integrità globale dell'elezione, 
     \item \textbf{Consistenza della Merkle Root:} ricalcola l'albero dai fingerprint $F_j$ pubblicati e verifica che coincida con la radice nel record di chiusura;
     \item \textbf{Integrità sequenziale:} valida a cascata tutti gli hash pointer, escludendo alterazioni, inserimenti o rimozioni nella hash chain;
     \item \textbf{Validità delle firme:} verifica con $PU_{AE}$ che ogni blocco sia autenticato dall'AE;
-    \item \textbf{Coerenza numerica:} controlla l'equazione $k_{conformi} + k_{invalide} = k_{totale}$;
+    \item \textbf{Coerenza numerica:} controlla che $k_{conformi} + k_{invalide} = k_{totale}$ e che $k_{invalide}$ e $k_{totale}$ corrispondano rispettivamente al numero di record $Invalid$ e $Record_j$ effettivamente pubblicati nella hash chain, non solo alla loro coerenza aritmetica interna al $Doc_{finale}$;
     \item \textbf{Autenticità del documento finale:} verifica la firma sul $Doc_{finale}$.
 \end{itemize}
 
