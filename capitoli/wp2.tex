@@ -9,13 +9,13 @@ Lo pseudo-anonimato così ottenuto dipende dall'Assunzione~1 del WP1, cioè dall
 
 Restano inoltre due limiti strutturali che il protocollo non può eliminare con i soli strumenti del corso: la segretezza delle singole schede rispetto all'AE durante lo scrutinio (Sezione~\ref{subsec:wp2_limite_sec1}) e la verificabilità universale piena del conteggio (Sezione~\ref{subsec:wp2_limite_ver2}). In entrambi i casi WP2 descrive le mitigazioni adottate, mentre WP3 ne analizzerà il rischio residuo.
 
-\clearpage
+
 \section{Parametri e notazione}
 \label{sec:parametri_notazione}
 
 Al fine di garantire chiarezza espositiva ed evitare ambiguità descrittive nelle sezioni successive, la Tabella \ref{tab:parametri_notazione} definisce in un'unica legenda la notazione crittografica e i parametri operativi utilizzati in tutte le fasi del protocollo.
 
-\begin{table}[!htbp]
+\begin{table}[H]
 \centering
 \renewcommand{\arraystretch}{1.3} % Aumenta leggermente lo spazio verticale per migliore leggibilità
 \begin{tabular}{|l|p{4.5cm}|p{7.5cm}|}
@@ -70,7 +70,6 @@ Il protocollo realizza l'autenticazione degli elettori secondo il modello di \te
 
 \noindent\textbf{Proprietà realizzate:} [AUTH-1], [AUTH-2].
 
-\clearpage
 \section{Il flusso del protocollo}
 \label{sec:flusso_protocollo}
 
@@ -492,7 +491,7 @@ Ai fini della verifica individuale [VER-1] l'elettore conserva soltanto il ciphe
 
 \textbf{Proprietà realizzate:} [INT-2], [UNIQ-1], [SEC-3].
 
-\clearpage
+
 \section{Architettura dell'urna pubblica: struttura ibrida}
 \label{sec:architettura_urna}
 
@@ -500,9 +499,8 @@ L'urna elettorale pubblica rappresenta il fulcro della trasparenza e della verif
 
 Questa scelta progettuale separa due funzioni distinte. La \textit{hash chain} mantiene la sequenza storica dei record e rende rilevabili modifiche retroattive, mentre il \textit{Merkle Tree} funge da indice efficiente per produrre prove di inclusione. I dettagli della rilevabilità delle modifiche sono trattati nella sottosezione sull'append-only log, mentre il funzionamento delle prove di membership è descritto nella sottosezione dedicata al Merkle Tree.
 
-Nelle sottosezioni seguenti verranno quindi analizzati la struttura dei record, il meccanismo di pubblicazione e l'indice di verifica individuale.
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \vspace{2cm}
 \centering
 \resizebox{1\linewidth}{!}{%
@@ -836,7 +834,7 @@ Gli strumenti che supererebbero questo limite, eliminando la fiducia riposta nel
 
 Il protocollo garantisce quindi una segretezza non \textit{trustless} ma solida, su tre direttrici: \textbf{in transito} (canale TLS), \textbf{in conservazione pubblica} (l'urna espone solo $K_j$ e $F_j$, non $C_j$) e con \textbf{accesso in chiaro circoscritto} alla sola fase di scrutinio, riservato all'AE come \textit{trust authority} istituzionale che si impegna alla cancellazione dei plaintext dopo il consolidamento del risultato.
 
-\clearpage
+
 \section{Meccanismi di verifica}
 \label{sec:meccanismi_verifica}
 
@@ -962,7 +960,7 @@ Cardine della verifica è la ricevuta $R$, che vincola $K_j$, $F_j$, $j$ e $id_{
 
 Il possesso di $R$ è anche uno strumento di tutela procedurale: se in fase di pubblicazione la scheda venisse omessa o dichiarata assente, l'elettore può esibire $R$, autenticata dalla firma dell'AE, per contestare formalmente l'omissione, rendendo rilevabile una manipolazione interna.
 
-\clearpage
+
 \subsection{Verifica universale \texttt{[VER-2]}}
 \label{subsec:wp2_verifica_universale}
 
@@ -982,7 +980,7 @@ Come per la segretezza, la Verificabilità Universale realizzata è di tipo stru
 
 Il rischio di frode è mitigato solo in parte dalla \textbf{verifica individuale}, con cui la ricevuta $R$ consente all'elettore di contestare un'omissione della propria scheda. Per la correttezza aggregata dello scrutinio nel suo complesso, il protocollo non introduce meccanismi ulteriori verificabili dall'esterno: il limite descritto in questa sezione resta un vincolo strutturale accettato.
 
-\clearpage
+
 \section{Riepilogo funzionale delle proprietà di sicurezza}
 \label{sec:riepilogo_proprieta}
 
@@ -1085,7 +1083,7 @@ La matrice seguente riepiloga come i requisiti di WP1 siano stati tradotti in me
 
 \end{longtable}
 
-\clearpage
+
 \section{Analisi critica delle scelte progettuali}
 \label{sec:scelte_progettuali}
 
@@ -1102,7 +1100,7 @@ Il protocollo adotta un modello \textit{one-shot}: una volta sottomesso e valida
 \end{enumerate}
 Il modello accetta quindi un rischio residuo: un elettore coartato \textit{prima} dell'invio non può poi sovrascrivere il voto estorto. La limitazione è giudicata accettabile a fronte della tutela dell'anonimato di rete garantita dall'impostazione attuale.
 
-\clearpage
+
 \section{Strumenti del corso utilizzati e considerati}
 \label{sec:strumenti_corso}
 
@@ -1131,6 +1129,6 @@ Durante la fase di \textit{design}, alcuni strumenti e protocolli analizzati nel
 \begin{itemize}
     \item \textbf{AES e cifratura simmetrica applicativa dedicata:} l'impiego della crittografia simmetrica al livello applicativo (per cifrare il singolo voto) è stato scartato. Il \textit{payload} (un intero rappresentante il candidato) è di dimensioni minime e non richiede i vantaggi prestazionali dell'AES. Inoltre, stabilire una chiave simmetrica condivisa \textit{ad-hoc} tra ogni singolo elettore e l'AE comporterebbe un onere di \textit{key management} ingiustificato. Il modello a chiave pubblica (RSA-OAEP), in cui chiunque può cifrare ma solo l'AE può decifrare, risulta strutturalmente superiore per questo scenario (sebbene AES operi trasparentemente a livello di trasporto nel tunnel TLS).
     \item \textbf{KDC (\textit{Key Distribution Center}) e Needham-Schroeder:} i protocolli di distribuzione delle chiavi basati su un arbitro centrale fidato e su crittografia simmetrica sono ideali per reti chiuse o aziendali. In un sistema elettorale su vasta scala (Internet), distribuire chiavi di sessione tramite un KDC introdurrebbe un collo di bottiglia critico e richiederebbe la registrazione preventiva di ogni client con il server, un approccio superato dalla flessibilità della crittografia asimmetrica e della PKI.
-    \item \textbf{Diffie-Hellman applicativo diretto:} la derivazione di un segreto condiviso \textit{in-band} tra elettore e AE tramite scambio Diffie-Hellman non è necessaria al livello logico del protocollo. La cifratura asimmetrica risolve già il problema dell'imbustamento del voto, mentre la \textit{Perfect Forward Secrecy} (PFS) sulle sessioni di comunicazione viene interamente delegata all'\textit{handshake} del protocollo TLS sottostante.
+    \item \textbf{Diffie-Hellman applicativo diretto:} la derivazione di un segreto condiviso \textit{in-band} tra elettore e AE tramite scambio Diffie-Hellman non è necessaria al livello logico del protocollo. La cifratura asimmetrica risolve già il problema della confidenzialità del voto, mentre la generazione di chiavi di sessione fresche per ogni connessione viene interamente delegata all'\textit{handshake} del protocollo TLS sottostante.
     \item \textbf{Blockchain e Smart Contract:} non vengono adottati come infrastruttura di base. Il protocollo utilizza solo le primitive utili, cioè hash chain e Merkle Tree; la motivazione dell'esclusione è stata discussa nella Sezione~\ref{subsec:wp2_centralizzata_vs_blockchain}
 \end{itemize}
