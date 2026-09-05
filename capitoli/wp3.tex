@@ -467,7 +467,7 @@ L'architettura dell'urna pubblica garantisce l'immutabilità della sequenza temp
 
 Il protocollo non introduce meccanismi crittografici aggiuntivi per colmare questo limite: soluzioni che renderebbero lo scrutinio verificabile da chiunque (Zero-Knowledge Proofs, tally omomorfico verificabile) richiedono primitive fuori dal perimetro del corso, come già discusso per \textbf{[SEC-1]} (\ref{subsec:3.3.4_limite_sec1}). L'unico controllo pubblico disponibile resta quello di coerenza numerica, $k_{conformi}+k_{invalide}=k_{totale}$, pubblicato nel $Doc_{finale}$ e riscontrabile contro il numero di record $Invalid$ e $Record_j$ effettivamente pubblicati nella hash chain (WP2, Sezione~\ref{subsec:wp2_verifica_universale}): una condizione necessaria ma non sufficiente, poiché non dimostra che i singoli conteggi corrispondano ai voti realmente espressi. Il rischio residuo sul computo aggregato viene quindi accettato consapevolmente, in coerenza con la natura dell'AE come autorità istituzionale riconosciuta e non un ambiente \textit{trustless} (WP2, \ref{subsec:wp2_centralizzata_vs_blockchain}).
 
-\clearpage
+
 \section{Analisi dei Trade-off: Impossibilità di miglioramenti a costo zero}
 \label{sec:3.4_analisi_tradeoff}
 
