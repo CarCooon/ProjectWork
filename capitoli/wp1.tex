@@ -10,8 +10,6 @@ Infine, verranno formalizzate le proprietà di resilienza che il protocollo deve
 
 La definizione accurata del modello costituisce la base necessaria per lo sviluppo di un sistema di voto elettronico che sia non solo funzionale, ma anche sicuro e affidabile, in grado di resistere a una vasta gamma di minacce e di garantire la fiducia degli elettori e degli osservatori.
 
-\clearpage
-
 
 \section{Tipologia di elezione}
 \label{sec:1.1_tipologia_elezione}
@@ -24,8 +22,6 @@ La scelta di questo specifico modello, in conformità con i requisiti di progett
 Al contrario, l'utilizzo di una lista chiusa permette di modellare i voti attraverso un formato logico predefinito e rigorosamente omogeneo. Questo approccio astrae e semplifica il soddisfacimento dei requisiti di confidenzialità e integrità: garantendo che ogni singola scheda appartenga a un dominio ristretto, si facilita enormemente la verifica della sua conformità strutturale.
 
 Il compromesso fondamentale adottato in questa scelta progettuale risiede quindi nel privilegiare l'efficienza algoritmica e l'integrità a discapito della massima generalità del tipo di voto. Si ritiene che, per gli scopi di questo protocollo, garantire il più possibile la correttezza del conteggio e la robustezza strutturale delle schede sia prioritario e strategicamente più solido rispetto all'implementazione di sistemi di preferenza complessi.
-
-\clearpage
 
 
 \section{Funzionamento del sistema}
@@ -159,7 +155,7 @@ Se da un lato la revocabilità offre una difesa teorica contro il voto di scambi
 \noindent
 Sulla base di questa onesta analisi critica dei limiti strutturali, si stabilisce come scelta progettuale definitiva che \textbf{il voto espresso sia rigidamente non revocabile e non modificabile (modello "one-shot")}. Una volta che la scheda viene trasmessa e registrata, essa è considerata definitiva e immutabile. Si evidenzia come tale semplificazione rappresenti un compromesso ingegneristico pienamente giustificato per lo scenario universitario di riferimento: a differenza delle elezioni politiche nazionali, dove l'alto rischio di voto di scambio e coercizione sistemica rende la revocabilità un requisito irrinunciabile, in ambito accademico la minaccia di estorsione organizzata del voto rappresenta un rischio decisamente più contenuto. Di conseguenza, si ritiene corretto privilegiare la linearità del protocollo, la robustezza dello pseudo-anonimato e la massima efficienza computazionale globale del sistema. Il rischio residuo legato alla coercizione estemporanea viene accettato e parzialmente mitigato attraverso la rigidità del formato a lista chiusa descritto in precedenza.
 
-\clearpage
+
 \section{Attori Onesti del Sistema}
 \label{sec:1.3_attori_onesti}
 
@@ -318,11 +314,6 @@ Il \textbf{Verificatore Pubblico} è un attore indipendente e passivo, che può 
 \end{figure}
 
 
-
-
-
-
-\clearpage
 \section{Assunzioni di Fiducia}
 \label{sec:1.4_assunzioni_fiducia}
 
@@ -358,7 +349,7 @@ La sicurezza di un sistema di voto elettronico non è mai assoluta, ma è intrin
 \textbf{Motivazione e compromessi:} La proprietà [AUTH-1] (Sezione~\ref{sec:1.6_proprieta_sicurezza}) protegge il sistema da soggetti esterni o non autorizzati, ma non può da sola impedire a un SA disonesto di applicare scorrettamente le liste elettorali dall'interno: è una minaccia intrinseca a qualunque gestore di un controllo di accesso centralizzato, e mitigarla con soli strumenti crittografici richiederebbe meccanismi di verifica pubblica delle liste che esulano dal perimetro di questo protocollo. \\
 \textbf{Rischio Residuo:} Se il SA agisce in modo disonesto (Sezione~\ref{sec:1.5_threat_model}, punto 6), può escludere ingiustamente aventi diritto o abilitare soggetti non legittimi, senza che il resto del protocollo sia in grado di rilevarlo autonomamente.
 
-\clearpage
+
 \section{Modello di Minaccia (Threat Model)}
 \label{sec:1.5_threat_model}
 
@@ -400,7 +391,7 @@ Definire il Modello di Minaccia serve a inquadrare in modo realistico le entità
 \textbf{Descrizione:} Questo avversario sfrutta il suo ruolo centrale nella raccolta delle schede per falsare l'esito della consultazione. Quando agisce in modo passivo, cerca di scoprire le preferenze in anticipo per monitorare segretamente l'andamento delle votazioni. Quando opera in modo attivo, tenta di alterare il conteggio finale, scartando di proposito voti validi oppure inserendo preferenze arbitrarie all'interno dell'urna. \\
 \textbf{Risorse:} Rappresenta la minaccia interna con il controllo più ampio sui dati raccolti. Gestisce direttamente l'infrastruttura che ospita l'urna digitale e la bacheca pubblica accessibile a tutti. Ha in custodia i voti protetti e si occupa materialmente del calcolo dei risultati, ma non ha a disposizione le informazioni necessarie per collegare una specifica scheda alla persona reale che l'ha inviata.
 
-\clearpage
+
 \section{Proprietà di Sicurezza da Preservare}
 \label{sec:1.6_proprieta_sicurezza}
 
@@ -514,23 +505,23 @@ Questa categoria rappresenta il fondamento della trasparenza del sistema. Poich�
     \label{fig:matrice_minacce}
 \end{figure}
 
-\clearpage
+
 \section{Completeness}
 \label{sec:1.7_completeness}
 
-La proprietà di completezza descrive la garanzia di funzionamento del protocollo nel cosiddetto "percorso felice" (\textit{happy path}). Essa stabilisce che, qualora tutte le entità partecipanti (Elettore, Sistema di Autenticazione, Autorità Elettorale e Verificatore Pubblico) si comportino in modo strettamente onesto seguendo fedelmente le regole del protocollo, e assumendo valide le ipotesi di fiducia delineate nella Sezione \ref{sec:1.4_assunzioni_fiducia}, il sistema terminerà con successo producendo un risultato matematicamente esatto e pubblicamente verificabile.
+La proprietà di completezza descrive la garanzia di funzionamento del protocollo nel cosiddetto "percorso felice" (\textit{happy path}). Essa stabilisce che, qualora tutte le entità partecipanti (Elettore, SA, AE e Verificatore Pubblico) si comportino onestamente seguendo le regole del protocollo, sotto le ipotesi di fiducia della Sezione \ref{sec:1.4_assunzioni_fiducia}, il sistema produrrà un risultato esatto e pubblicamente verificabile.
 
-In questo scenario ideale, privo di avversari attivi o passivi, la completezza del modello si articola nelle seguenti garanzie logiche sequenziali:
+In questo scenario ideale, privo di avversari, la completezza del modello si articola nelle seguenti garanzie:
 
 \begin{enumerate}
     \item \textbf{Garanzia di Accesso:} Ogni elettore legittimo che si interfacci correttamente con il Sistema di Autenticazione otterrà con successo l'abilitazione al voto. Il sistema non genererà falsi negativi, permettendo all'utente di procedere regolarmente verso la fase di votazione.
     
     \item \textbf{Garanzia di Accettazione e Ricevuta:} Se l'elettore onesto compila la propria scheda conformemente al formato previsto (selezionando un'unica opzione tra le $N$ liste chiuse), la scheda supererà il controllo di conformità strutturale. L'Autorità Elettorale accetterà la sottomissione, la registrerà nell'urna elettronica pubblica (in cui è possibile solo aggiungere elementi e non cancellarli) e l'elettore riceverà una ricevuta di sottomissione pienamente valida ai fini della verificabilità individuale.
     
-    \item \textbf{Correttezza del Computo Aggregato:} Alla chiusura formale delle urne, l'Autorità Elettorale eseguirà l'algoritmo di scrutinio sui dati raccolti. La proprietà di completezza assicura che il totale calcolato per ciascuna lista corrisponderà esattamente alla corretta aggregazione delle reali preferenze inviate dagli elettori onesti, senza alcuna dispersione o alterazione dei dati.
+    \item \textbf{Correttezza del Computo Aggregato:} Alla chiusura formale delle urne, l'Autorità Elettorale eseguirà l'algoritmo di scrutinio sui dati raccolti. La proprietà di completezza assicura che il totale calcolato per ciascuna lista corrisponderà esattamente alla corretta aggregazione delle preferenze inviate dagli elettori onesti, senza dispersione né alterazione.
     
-    \item \textbf{Convergenza della Verificabilità (con probabilità 1):} Poiché tutte le schede sono state generate e processate rispettando il protocollo, le prove matematiche prodotte insieme ai risultati dello scrutinio risulteranno intrinsecamente corrette. Di conseguenza, l'algoritmo di verifica universale eseguito dal Verificatore Pubblico sui dati dell'urna restituirà sempre esito positivo. Analogamente, la verifica individuale condotta dall'elettore sulla propria ricevuta andrà a buon fine con certezza assoluta (probabilità pari a 1).
+    \item \textbf{Convergenza della Verificabilità (con probabilità 1):} Poiché tutte le schede sono state generate e processate rispettando il protocollo, le prove matematiche prodotte insieme ai risultati dello scrutinio risulteranno intrinsecamente corrette. Di conseguenza, l'algoritmo di verifica universale eseguito dal Verificatore Pubblico sui dati dell'urna restituirà sempre esito positivo. Analogamente, la verifica individuale condotta dall'elettore sulla propria ricevuta andrà sempre a buon fine, con probabilità 1.
 \end{enumerate}
 
 \noindent
-La formalizzazione di questa proprietà è un requisito propedeutico per le successive fasi di modellazione: dimostra infatti la validità algoritmica e strutturale del sistema prima ancora di introdurre il modello di minaccia e di analizzare il comportamento del protocollo in presenza di entità malevole.
+La formalizzazione di questa proprietà è propedeutica alle fasi successive: dimostra la validità algoritmica e strutturale del sistema prima di introdurre il modello di minaccia e analizzarne il comportamento in presenza di entità malevole.
