@@ -80,7 +80,6 @@ prevenendo strutturalmente che tuple diverse possano produrre lo stesso digest. 
 
 \paragraph{Parametri.} Utilizzo di coppie di chiavi RSA da 2048 bit (esponente pubblico $e = 65537$) e SHA-256 come funzione di hash. Adozione di OAEP per le operazioni di cifratura e PSS per l'apposizione delle firme digitali. I timestamp vengono formattati e inseriti nei digest come numeri interi. Il trasporto è simulato in-process: i tempi riportati riflettono unicamente il costo computazionale di elaborazione, escludendo latenza di rete. La confidenzialità del canale di comunicazione è assunta come prerequisito del modello e non riprodotta esplicitamente nel codice.
 
-\clearpage
 
 \section{Architettura del codice}
 \label{sec:wp4_architettura}
@@ -145,9 +144,17 @@ Per garantire robustezza e coerenza architetturale, l'implementazione delle stru
 \begin{itemize}
   \item \textbf{Immutabilità strutturale:} Ogni entità definita nel WP2 è implementata nativamente come una \texttt{frozen dataclass}, prevenendo alterazioni accidentali a \emph{runtime}.
   \item \textbf{Serializzazione selettiva:} Il metodo \texttt{signed\_bytes()} restituisce la serializzazione TLV dei soli campi destinati al digest firmato (escludendo il campo della firma stessa).
-  \item \textbf{Concatenazione dei blocchi:} I nodi della \emph{hash chain} espongono un metodo aggiuntivo \texttt{block\_digest()~=~$H(\texttt{wire}([\texttt{signed\_bytes}, \texttt{signature}]))$}. Questo calcola l'hash dell'intero blocco (firma inclusa), fungendo in modo sicuro da \emph{hash pointer} per l'anello successivo della catena.
+  \item \textbf{Concatenazione dei blocchi:} I nodi della \emph{hash chain} espongono un metodo aggiuntivo:
+  
+  \vspace{0.1em}
+  
+  \texttt{block\_digest()~=~$H(\texttt{wire}([\texttt{signed\_bytes}, \texttt{signature}]))$}. 
+  
+  \vspace{0.1em}
+  Questo calcola l'hash dell'intero blocco (firma inclusa), fungendo in modo sicuro da \emph{hash pointer} per l'anello successivo della catena.
 \end{itemize}
 
+\noindent
 La tabella seguente mappa le strutture teoriche del WP2 sulle classi concrete e sui relativi campi firmati:
 
 \begin{center}
@@ -202,7 +209,7 @@ Le assunzioni di fiducia del WP1 (\ref{sec:1.4_assunzioni_fiducia}) sono state t
 in vincoli strutturali all'interno del codice:
 
 \begin{itemize}
-  \item \textbf{Isolamento dei registri (Non-collusione SA/AE):} Il registro interno delle identità del SA non viene mai condiviso con l'AE. La co-firma delle Merkle Root avviene tramite il metodo \texttt{AuthServer.cosign\_roots(ae.view())}: questo garantisce che il SA legga esclusivamente la vista pubblica, senza poter mai accedere allo stato interno o ai dati privati dell'AE.
+  \item \textbf{Isolamento dei registri (Non-collusione SA/AE):} Il registro interno delle identità del SA non viene mai condiviso con l'AE. La co-firma delle Merkle Root avviene tramite il metodo \texttt{AuthServer.}\allowbreak\texttt{cosign\_roots(ae.view())}, che garantisce come il SA legga esclusivamente la vista pubblica, senza poter mai accedere allo stato interno o ai dati privati dell'AE.
   
   \item \textbf{Custodia \emph{offline} della chiave di scrutinio:} La chiave privata dell'elezione $PR_{ele}$ non viene mai passata al costruttore di \texttt{ElectoralAuthority}. Viene invece segregata in un'apposita classe \texttt{KeyCustodian} e rilasciata solo tramite \texttt{activate\_tally\_key()}. Questo metodo rifiuta tassativamente il rilascio della chiave se $\texttt{now} < t_{\text{chiusura}}$ o se l'urna risulta ancora aperta, sollevando tempestivamente un \texttt{TallyKeyError}.
   
@@ -211,7 +218,6 @@ in vincoli strutturali all'interno del codice:
   \item \textbf{Modello \emph{one-shot} irrevocabile:} Il sistema non espone intenzionalmente alcuna API per la revoca, l'aggiornamento o la sostituzione della scheda. Un secondo pacchetto di voto $M$ firmato e inviato con la medesima chiave effimera $PU_v$ viene implacabilmente respinto dal Controllo 3 in fase di ricezione.
 \end{itemize}
 
-\clearpage
 
 \section{Flusso del protocollo implementato}
 \label{sec:wp4_flusso}
@@ -247,7 +253,6 @@ Il flusso dell'implementazione ricalca l'ordine logico delle fasi descritte nel 
   \item \textbf{Verifica universale [VER-2]:} L'attore \texttt{PublicVerifier.verify\_universal} esegue un audit completo e indipendente. Controlla l'integrità sequenziale della \emph{hash chain}, convalida le firme dell'AE su ogni blocco e le doppie firme (AE+SA) sulle Root, accerta la consistenza della Root con il $\mathit{Record}_{\text{chiusura}}$ e il $\mathit{Doc}_{\text{finale}}$. Infine, valida l'autenticità del documento finale e l'equazione di coerenza numerica ($k_{\text{conformi}} + k_{\text{invalide}} = k_{\text{totale}}$), verificando l'esatta corrispondenza tra i record $\mathit{Invalid}_j$ e i $\mathit{Record}_j$ effettivi.
 \end{itemize}
 
-\clearpage
 
 \section{Esempio di esecuzione}
 \label{sec:wp4_esempio}
@@ -319,7 +324,6 @@ L'esecuzione del prototipo dimostra il rispetto dei vincoli architetturali:
   \item \textbf{Verifica Individuale [VER-1]:} L'ultimo controllo attesta che tutti i 100 elettori sono riusciti a ricalcolare autonomamente i digest $K$ e $F$, e a validare con successo la \emph{Merkle proof} contro la Root definitiva co-firmata.
 \end{itemize}
 
-\clearpage
 
 \section{Verifica operativa dei controlli e suite di test}
 \label{sec:wp4_test}
@@ -348,7 +352,6 @@ L'implementazione fornisce script per simulare interi scenari:
   \item \textbf{Modello di Minaccia (\texttt{use\_cases/adversary\_cases.py}):} Esegue una verifica contro i sette profili avversariali definiti nel WP1 (\ref{sec:1.5_threat_model}). Per ciascun profilo illustra i vettori neutralizzati (21 scenari d'attacco distinti verificati su 21), evidenzia i vincoli pubblici che smaschererebbero eventuali abusi da parte di un \emph{insider} e documenta apertamente i limiti dichiarati come "rischio residuo". I dettagli estesi di questa analisi sono riportati in \ref{sec:wp4_minacce}.
 \end{itemize}
 
-\clearpage
 
 \section{Benchmark e metriche misurate}
 \label{sec:wp4_benchmark}
@@ -452,7 +455,6 @@ Merkle proof ($n=60$) & 192 & $32\,\text{B} \times \lceil\log_2 60\rceil = 6$ ha
 \paragraph{Analisi delle dimensioni} Le dimensioni riflettono fedelmente la serializzazione binaria canonica adottata dal progetto (formato DER per le chiavi RSA-2048, \emph{byte} grezzi per digest/ciphertext/firme, e $5$~byte di \emph{framing} TLV per ogni singolo campo). 
 Il pacchetto $M$ si conferma come la struttura più pesante dell'intero protocollo ($1156$ byte), in quanto racchiude al suo interno il ciphertext RSA ($256$ byte), il certificato $C_p$ contenente il DER di $PU_v$ ($\approx 294$ byte) e la firma effimera $\sigma$ ($256$ byte).
 
-\clearpage
 
 \section{Analisi della scalabilità}
 \label{sec:wp4_scalabilita}
@@ -490,7 +492,6 @@ I risultati confermano l'efficienza strutturale dell'architettura:
   \item \textbf{Costruzione Merkle Tree --- $O(n)$ a costo residuale:} Pur avendo una complessità lineare (una singola operazione SHA-256 per nodo), la costruzione dell'albero vanta un coefficiente costante estremamente ridotto. A $n=40.000$ l'operazione richiede circa $108$~ms, incidendo solo marginalmente (attorno al 5--6\%) sul costo totale di \textbf{[VER-2]}. Non rappresenta, pertanto, alcun collo di bottiglia per le prestazioni del sistema.
 \end{itemize}
 
-\clearpage
 
 \section{Minacce neutralizzate: implementazione e modello di minaccia}
 \label{sec:wp4_minacce}
