@@ -28,7 +28,7 @@
 
 Questo capitolo descrive la traduzione del protocollo definito nel WP2 in codice eseguibile e la misurazione quantitativa delle sue prestazioni. Il risultato non costituisce un sistema pronto per la produzione, bensì un \textbf{prototipo eseguibile} in grado di riprodurre l'intero flusso elettorale all'interno di un unico processo Python (dal setup all'autenticazione, dalla costruzione della scheda allo scrutinio, fino alle verifiche individuali e universali).
 
-Ogni attore è modellato come un modulo indipendente, e ogni struttura dati del WP2 è implementata come una \texttt{dataclass} immutabile, dotata di un unico metodo di serializzazione canonica per le operazioni crittografiche. Gli artefatti di misurazione (CSV e report testuali) sono archiviati nella directory \texttt{wp4/artifacts/} e i valori citati nel presente capitolo sono estratti fedelmente dal log \texttt{RISULTATI\_BENCHMARK.txt}.
+Ogni attore è modellato come un modulo indipendente, e ogni struttura dati del WP2 è implementata come una \texttt{dataclass} immutabile, dotata di un unico metodo di serializzazione canonica per le operazioni crittografiche. Gli artefatti di misurazione (CSV e report testuali) sono archiviati nella directory \texttt{artifacts/} e i valori citati nel presente capitolo sono estratti fedelmente dal log \texttt{RISULTATI\_BENCHMARK.txt}.
 
 \section{Obiettivi dell'implementazione}
 \label{sec:wp4_obiettivi}
@@ -52,7 +52,7 @@ L'implementazione software persegue due obiettivi distinti ma complementari:
 \paragraph{Cifratura della scheda.} La cifratura del voto impiega RSA-OAEP, utilizzando SHA-256 come hash dell'etichetta e MGF1-SHA256. L'elettore cifra la preferenza utilizzando la chiave pubblica dell'elezione $PU_{ele}$; la decifratura è posticipata esclusivamente alla fase di scrutinio, a urne chiuse. Il fattore di casualità $r$ è gestito internamente dalla libreria crittografica e non viene mai esposto all'applicazione. Questo garantisce che il requisito di non disponibilità di $r$ (come da sezione \ref{subsubsec:wp2_cancellazione_prv} del WP2) sia soddisfatto per costruzione. Prima di procedere alla cifratura, la preferenza $i \in \{1,\ldots,N\}$ viene serializzata come intero a 4~byte in formato big-endian (\texttt{VOTE\_INT\_WIDTH~=~4}).
 
 \paragraph{Firme digitali.} La notazione $\mathrm{Sign}_{PR}(H(x))$ definita nel WP2 è
-stata implementata utilizzando \textbf{RSA-PSS}. In linea con i costrutti di sicurezza affrontati nel corso, lo schema adotta la maschera di generazione MGF1-SHA256 e massimizza l'entropia impostando la lunghezza del salt al valore massimo consentito ($\texttt{PSS.MAX\_LENGTH}$),    garantendo così la natura probabilistica della firma. SHA-256 è l'hash interno, applicato una sola volta: si passa la serializzazione canonica del payload a \texttt{private\_key.sign(...)}. Le
+stata implementata utilizzando \textbf{RSA-PSS}. Lo schema adotta la maschera di generazione MGF1-SHA256 e massimizza l'entropia impostando la lunghezza del salt al valore massimo consentito ($\texttt{PSS.MAX\_LENGTH}$),    garantendo così la natura probabilistica della firma. SHA-256 è l'hash interno, applicato una sola volta: si passa la serializzazione canonica del payload a \texttt{private\_key.sign(...)}. Le
 istanze di padding sono costanti di modulo, condivise da tutte le chiamate. Le
 firme sono impiegate dal SA sui certificati pseudonimi, dall'AE sui record
 dell'urna, sulle ricevute, sulle Merkle Root e sul documento finale, e
@@ -94,10 +94,9 @@ corrispondenza fra gli attori del modello e le componenti implementate.
 
 \begin{lstlisting}[style=consolewp4]
 aps-voting-protocol/
-  main.py                             elezione dimostrativa (happy path)
-  DOCUMENTO_SCELTE_IMPLEMENTATIVE.md  relazione tecnica sulle scelte progettuali
+  main.py                             entrypoint: elezione dimostrativa (happy path)
   artifacts/                          CSV + RISULTATI_BENCHMARK.txt
-  src/            un modulo per attore/responsabilita' 
+  src/            un modulo per attore/responsabilita'
     crypto.py  merkle.py  messages.py  sim.py
     sa.py  ae.py  urn.py  voter.py  verifier.py  election.py
   tests/          59 test pytest in 4 file + conftest.py
@@ -253,7 +252,7 @@ Il flusso dell'implementazione ricalca l'ordine logico delle fasi descritte nel 
 \section{Esempio di esecuzione}
 \label{sec:wp4_esempio}
 
-Per verificare il corretto collegamento operativo di tutte le fasi descritte, è stata simulata un'elezione completa \emph{end-to-end} lanciando l'entrypoint \texttt{python main.py}. Lo scenario è configurato con i seguenti parametri:
+Per verificare il corretto collegamento operativo di tutte le fasi descritte, è stata simulata un'elezione completa \emph{end-to-end} lanciando l'entrypoint \texttt{python main.py} (che richiama internamente lo scenario \texttt{use\_cases/happy\_path.py}). Lo scenario è configurato con i seguenti parametri:
 \begin{itemize}
   \item \textbf{Configurazione:} $N = 4$ liste, \texttt{id\_elezione = "unisa-cds-2026"}, pubblicazione differita ogni 10 schede accettate.
   \item \textbf{Partecipazione:} 100 elettori. Ogni elettore $k$ vota deterministicamente la lista $(k \bmod 4) + 1$.
@@ -315,8 +314,8 @@ HAPPY PATH: SUCCESSO
 L'esecuzione del prototipo dimostra il rispetto dei vincoli architetturali:
 \begin{itemize}
   \item \textbf{Sicurezza dell'elettore:} Le righe di log certificano che l'indice $j$ viene fissato al momento dell'accettazione e che la chiave privata effimera $PR_v$ viene distrutta \emph{esclusivamente dopo} aver verificato con successo la ricevuta dell'AE.
-  \item \textbf{Audit Amministrativo:} Alla chiusura, oltre alla correttezza dei risultati, viene superato il controllo amministrativo ($k_{\text{totale}} \le \text{certificati emessi}$). Questo riscontro è a uso esclusivo di un ipotetico auditor interno all'Ateneo, poiché il Verificatore Pubblico non ha accesso ai registri privati del SA.
-  \item \textbf{Verifica Universale [VER-2]:} I 21 controlli di integrità di \textbf{[VER-2]} superati mappano in rapporto uno-a-uno i requisiti teorici di WP2 (\ref{subsec:wp2_verifica_universale}). L'algoritmo convalida l'integrità della \emph{hash chain}, tutte le firme dell'AE, le doppie co-firme (AE+SA) sulle Root, la corrispondenza dei record invalidi e la coerenza numerica ($k_{\text{conformi}} + k_{\text{invalide}} = k_{\text{totale}}$).
+  \item \textbf{Controllo amministrativo:} Alla chiusura, oltre alla correttezza dei risultati, viene superato il controllo amministrativo ($k_{\text{totale}} \le \text{certificati emessi}$). Si tratta di un controllo amministrativo istituzionale post-elettorale, non di un meccanismo crittografico accessibile al Verificatore Pubblico: il confronto richiede l'accesso al registro interno delle identità gestito dal SA (\texttt{issued\_count()}), dato privato mai esposto nella vista pubblica dell'urna.
+  \item \textbf{Verifica Universale [VER-2]:} I 21 controlli di integrità superati da \textbf{[VER-2]} coprono integralmente, scomponendoli in verifiche granulari, i requisiti teorici del WP2 (\ref{subsec:wp2_verifica_universale}) -- inclusi, tra gli altri, l'incrocio della Merkle Root sia con il $Record_{\text{chiusura}}$ sia con il $Doc_{\text{finale}}$, e la doppia firma AE+SA sulla Root. L'algoritmo convalida l'integrità della \emph{hash chain}, tutte le firme dell'AE, le doppie co-firme (AE+SA) sulle Root, la corrispondenza dei record invalidi e la coerenza numerica ($k_{\text{conformi}} + k_{\text{invalide}} = k_{\text{totale}}$).
   \item \textbf{Verifica Individuale [VER-1]:} L'ultimo controllo attesta che tutti i 100 elettori sono riusciti a ricalcolare autonomamente i digest $K$ e $F$, e a validare con successo la \emph{Merkle proof} contro la Root definitiva co-firmata.
 \end{itemize}
 
@@ -338,7 +337,7 @@ Per non far dominare il costo computazionale dalle operazioni di \emph{keygen} p
   
   \item \textbf{\texttt{test\_integrity\_negative.py} (13 test):} Parte da uno \emph{snapshot} valido per poi testare scenari negativi: record modificati/rimossi/iniettati, firme AE contraffatte, Merkle Root incoerenti con il $\mathit{Doc}_{\text{finale}}$ o documenti alterati, Root senza co-firma (o con firma SA contraffatta), e $\mathit{Invalid}_j$ duplicati o riferiti a indici inesistenti. Appura infine che la verifica individuale fallisca se $F_j$ scompare o la Root viene alterata.
   
-  \item \textbf{\texttt{test\_merkle.py} (22 test):} Svolge un \emph{roundtrip} completo della prova di inclusione su tutti gli indici per $n \in \{1,\ldots,100\}$, confermando la lunghezza logaritmica $\lceil\log_2 n\rceil$. Dimostra inoltre che l'albero si impegna sul numero di foglie e verifica l'iniettività della funzione \texttt{wire} sui campi a lunghezza variabile.
+  \item \textbf{\texttt{test\_merkle.py} (22 test):} Svolge un \emph{roundtrip} completo della prova di inclusione su tutti gli indici, per una selezione di valori di $n$ tra 1 e 100 (potenze di due e relativi casi limite); verifica separatamente, per $n$ fino a 30.000, che la lunghezza della prova segua l'andamento logaritmico $\lceil\log_2 n\rceil$. Dimostra inoltre che l'albero si impegna sul numero di foglie e verifica l'iniettività della funzione \texttt{wire} sui campi a lunghezza variabile.
 \end{itemize}
 
 
@@ -365,7 +364,7 @@ Le metriche prestazionali sono state raccolte eseguendo tre scenari isolati tram
   \item Test di scalabilità su urne sintetiche di dimensione crescente.
 \end{enumerate}
 
-I file CSV generati in \texttt{wp4/artifacts/} costituiscono la fonte autoritativa dei dati; i valori discussi in questa sezione ne rappresentano un estratto fedele. Di seguito le specifiche dell'ambiente di test:
+I file CSV generati in \texttt{artifacts/} costituiscono la fonte autoritativa dei dati; i valori discussi in questa sezione ne rappresentano un estratto fedele. Di seguito le specifiche dell'ambiente di test:
 
 \begin{itemize}
   \item \textbf{Sistema operativo:} Windows 11 (10.0.26200-SP0)
@@ -388,28 +387,28 @@ I valori assoluti variano tra diverse esecuzioni. L'obiettivo dell'analisi è va
 \hline
 \textbf{Operazione} & \textbf{Rip.} & \textbf{Media (ms)} & \textbf{Dev.std (ms)} \\
 \hline
-Generazione chiavi RSA-2048      & 25   & 46,273  & 28,083 \\
-RSA-OAEP encrypt (voto 4~B)      & 200  & 0,034   & 0,037  \\
-RSA-OAEP decrypt                 & 200  & 0,571   & 0,134  \\
-Firma hash-and-sign RSA-PSS (256~B) & 200 & 0,592  & 0,169  \\
-Verifica firma RSA-PSS           & 200  & 0,033   & 0,013  \\
-SHA-256 (256~B)                  & 4000 & 0,002   & 0,002  \\
-Costruzione Merkle Tree ($n=4096$) & 20  & 11,344  & 0,447  \\
+Generazione chiavi RSA-2048      & 25   & 42,216  & 16,914 \\
+RSA-OAEP encrypt (voto 4~B)      & 200  & 0,065   & 0,501  \\
+RSA-OAEP decrypt                 & 200  & 0,573   & 0,120  \\
+Firma hash-and-sign RSA-PSS (256~B) & 200 & 0,568  & 0,213  \\
+Verifica firma RSA-PSS           & 200  & 0,030   & 0,003  \\
+SHA-256 (256~B)                  & 4000 & 0,002   & 0,014  \\
+Costruzione Merkle Tree ($n=4096$) & 20  & 11,658  & 1,384  \\
 Generazione Merkle proof ($n=4096$) & 200 & 0,005  & 0,001  \\
-Verifica Merkle proof ($n=4096$) & 200  & 0,021   & 0,004  \\
-Verifica hash chain ($n=2000$)   & 10   & 101,270 & 5,123  \\
+Verifica Merkle proof ($n=4096$) & 200  & 0,019   & 0,002  \\
+Verifica hash chain ($n=2000$)   & 10   & 93,889  & 2,137  \\
 \hline
 \end{tabular}
 \end{center}
 
 \paragraph{Analisi del profilo prestazionale.} I risultati delineano tre distinti ordini di grandezza:
 \begin{itemize}
-  \item \textbf{Lento ($\approx 46$~ms):} La generazione di chiavi RSA-2048, caratterizzata da un'alta varianza dovuta alla natura probabilistica del test di primalità.
+  \item \textbf{Lento ($\approx 42$~ms):} La generazione di chiavi RSA-2048, caratterizzata da un'alta varianza dovuta alla natura probabilistica del test di primalità.
   \item \textbf{Medio ($\approx 0{,}6$~ms):} Le operazioni crittografiche che impiegano l'esponente privato (\emph{decrypt} e \emph{sign}).
-  \item \textbf{Veloce ($< 0{,}03$~ms):} Le operazioni con esponente pubblico o basate su algoritmi di \emph{hashing} (\emph{encrypt}, \emph{verify}, SHA-256), che risultano da due a quattro ordini di grandezza più veloci rispetto alle precedenti.
+  \item \textbf{Veloce ($< 0{,}1$~ms):} Le operazioni con esponente pubblico o basate su algoritmi di \emph{hashing} (\emph{encrypt}, \emph{verify}, SHA-256), che risultano da due a quattro ordini di grandezza più veloci rispetto alle precedenti.
 \end{itemize}
 
-Si osserva inoltre un'asimmetria a favore dell'audit: la verifica RSA-PSS ($0{,}033$~ms) è circa 18 volte più rapida della firma ($0{,}592$~ms), il che rende sostenibile la verifica universale iterata su $n$ firme.
+Si osserva inoltre un'asimmetria a favore dell'audit: la verifica RSA-PSS ($0{,}030$~ms) è circa 19 volte più rapida della firma ($0{,}568$~ms), il che rende sostenibile la verifica universale iterata su $n$ firme.
 
 \subsection{Tempi di interazione end-to-end (60 elettori)}
 \label{subsec:wp4_e2e}
@@ -420,16 +419,16 @@ Si osserva inoltre un'asimmetria a favore dell'audit: la verifica RSA-PSS ($0{,}
 \hline
 \textbf{Operazione} & \textbf{Rip.} & \textbf{Media (ms)} & \textbf{Dev.std (ms)} \\
 \hline
-Autenticazione + emissione $C_p$ (Fase~1) & 60 & 54,412 & 38,398 \\
-Costruzione scheda $M$ (Fase~2)            & 60 & 0,667  & 0,172  \\
-Ricezione + ricevuta $R$ (Fase~3)          & 60 & 0,761  & 0,131  \\
-Verifica individuale \textbf{[VER-1]}      & 60 & 0,268  & 0,017  \\
-Verifica universale \textbf{[VER-2]} (60 record) & 1 & 3,403 & — \\
+Autenticazione + emissione $C_p$ (Fase~1) & 60 & 45,389 & 26,861 \\
+Costruzione scheda $M$ (Fase~2)            & 60 & 0,615  & 0,064  \\
+Ricezione + ricevuta $R$ (Fase~3)          & 60 & 0,732  & 0,072  \\
+Verifica individuale \textbf{[VER-1]}      & 60 & 0,262  & 0,004  \\
+Verifica universale \textbf{[VER-2]} (60 record) & 1 & 3,384 & — \\
 \hline
 \end{tabular}
 \end{center}
 
-\paragraph{Analisi dell'interazione.} La Fase 1 è nettamente dominante in termini di costo computazionale. Nello specifico, la generazione della coppia effimera $PU_v/PR_v$ incide per circa 46~ms sui 54~ms totali richiesti dalla fase, ereditando la marcata varianza tipica del processo di \emph{keygen}. Tutte le fasi di protocollo successive (costruzione, ricezione e verifica) beneficiano di tempistiche ridotte di almeno due ordini di grandezza, rendendo l'esperienza di voto istantanea per l'utente finale. Essendo il \emph{keygen} effimero l'unica operazione onerosa del percorso, in un dispiegamento reale esso verrebbe delegato \emph{client-side} al dispositivo dell'elettore (ed eventualmente anticipato rispetto all'apertura delle urne), annullando ogni impatto sul server centrale.
+\paragraph{Analisi dell'interazione.} La Fase 1 è nettamente dominante in termini di costo computazionale. Nello specifico, la generazione della coppia effimera $PU_v/PR_v$ incide per circa 42~ms sui 45~ms totali richiesti dalla fase, ereditando la marcata varianza tipica del processo di \emph{keygen}. Tutte le fasi di protocollo successive (costruzione, ricezione e verifica) beneficiano di tempistiche ridotte di almeno due ordini di grandezza, rendendo l'esperienza di voto istantanea per l'utente finale. Essendo il \emph{keygen} effimero l'unica operazione onerosa del percorso, in un dispiegamento reale esso verrebbe delegato \emph{client-side} al dispositivo dell'elettore (ed eventualmente anticipato rispetto all'apertura delle urne), annullando ogni impatto sul server centrale.
 
 \subsection{Dimensioni dei messaggi}
 \label{subsec:wp4_dimensioni}
@@ -467,15 +466,15 @@ Per valutare l'effettiva scalabilità del sistema in un contesto accademico, lo 
 \textbf{$n$ schede} & \textbf{Merkle build (ms)} & \textbf{Proof (hash / B)} &
 \textbf{Verif.~chain (ms)} & \textbf{[VER-2] (ms)} \\
 \hline
-500    & 1,330   & 9 / 288   & 26,52   & 27,78   \\
-2.000  & 5,583   & 11 / 352  & 115,63  & 103,18  \\
-5.000  & 14,059  & 13 / 416  & 253,80  & 261,53  \\
-10.000 & 28,472  & 14 / 448  & 536,61  & 532,39  \\
-20.000 & 60,416  & 15 / 480  & 1019,67 & 1067,14 \\
-30.000 & 85,332  & 15 / 480  & 1523,79 & 1607,37 \\
-35.000 & 97,859  & 16 / 512  & 1717,00 & 1795,78 \\
-40.000 & 117,810 & 16 / 512  & 1912,91 & 2392,49 \\
-50.000 & 142,617 & 16 / 512  & 2506,83 & 3285,10 \\
+500    & 1,328   & 9 / 288   & 23,31   & 24,45   \\
+2.000  & 5,223   & 11 / 352  & 93,27   & 97,37   \\
+5.000  & 13,173  & 13 / 416  & 239,45  & 248,24  \\
+10.000 & 26,379  & 14 / 448  & 467,78  & 499,39  \\
+20.000 & 53,345  & 15 / 480  & 932,04  & 973,88  \\
+30.000 & 81,858  & 15 / 480  & 1396,86 & 1503,58 \\
+35.000 & 131,762 & 16 / 512  & 2202,20 & 1823,99 \\
+40.000 & 107,757 & 16 / 512  & 1881,11 & 1954,73 \\
+50.000 & 136,265 & 16 / 512  & 2343,92 & 2445,56 \\
 \hline
 \end{tabular}
 \end{center}
@@ -486,9 +485,9 @@ I risultati confermano l'efficienza strutturale dell'architettura:
 \begin{itemize}
   \item \textbf{Merkle proof --- $O(\log n)$:} La dimensione della prova crittografica cresce in modo strettamente logaritmico, seguendo l'andamento $\lceil\log_2 n\rceil$. Il numero di hash necessari passa da 9 (a $n=500$) ad appena 16 (a $n=50.000$); un incremento di soli 7 elementi a fronte di una popolazione elettorale cresciuta di due ordini di grandezza. Generazione e verifica si mantengono stabilmente nell'ordine delle decine di microsecondi, garantendo che la verifica individuale resti istantanea e scalabile a qualsiasi dimensione elettorale.
   
-  \item \textbf{Verifica universale --- $O(n)$:} Come prevedibile, \textbf{[VER-2]} cresce in modo lineare rispetto a $n$. Il tempo di esecuzione è dominato computazionalmente dalla verifica delle $n$ firme RSA-PSS (una per ogni blocco della catena). Tuttavia, anche lavorando alla scala operativa massima stimata per UniSA ($n = 30.000$--$40.000$), l'audit crittografico completo si conclude in un arco di tempo estremamente contenuto, compreso tra $1{,}6$ e $2{,}4$ secondi.
-  
-  \item \textbf{Costruzione Merkle Tree --- $O(n)$ a costo residuale:} Pur avendo una complessità lineare (una singola operazione SHA-256 per nodo), la costruzione dell'albero vanta un coefficiente costante estremamente ridotto. A $n=40.000$ l'operazione richiede appena $118$~ms, incidendo per meno del 5\% sul costo totale di \textbf{[VER-2]}. Non rappresenta, pertanto, alcun collo di bottiglia per le prestazioni del sistema.
+  \item \textbf{Verifica universale --- $O(n)$:} Come prevedibile, \textbf{[VER-2]} cresce in modo linearmente crescente rispetto a $n$, pur con le oscillazioni tipiche di misure eseguite su una macchina di sviluppo non isolata (si veda, ad esempio, il valore a $n=35.000$, leggermente superiore a quello rilevato a $n=40.000$). Il tempo di esecuzione è dominato computazionalmente dalla verifica delle $n$ firme RSA-PSS (una per ogni blocco della catena). Tuttavia, anche lavorando alla scala operativa massima stimata per UniSA ($n = 30.000$--$40.000$), l'audit crittografico completo si conclude in un arco di tempo estremamente contenuto, compreso tra $1{,}5$ e $2{,}0$ secondi.
+
+  \item \textbf{Costruzione Merkle Tree --- $O(n)$ a costo residuale:} Pur avendo una complessità lineare (una singola operazione SHA-256 per nodo), la costruzione dell'albero vanta un coefficiente costante estremamente ridotto. A $n=40.000$ l'operazione richiede circa $108$~ms, incidendo solo marginalmente (attorno al 5--6\%) sul costo totale di \textbf{[VER-2]}. Non rappresenta, pertanto, alcun collo di bottiglia per le prestazioni del sistema.
 \end{itemize}
 
 \clearpage
@@ -560,7 +559,7 @@ Il prototipo sviluppato deve essere interpretato come una \emph{simulazione cont
 
   \item \textbf{Autenticazione d'Ateneo (IdP/OIDC/MFA):} L'\texttt{IdentityProvider} si limita a rilasciare un ID Token firmato contenente un flag booleano per l'MFA. L'effettivo cerimoniale OIDC passo-passo o i protocolli di sicurezza hardware (es. FIDO2/WebAuthn) non sono riprodotti.
 
-  \item \textbf{Custodia \emph{offline} di $PR_{ele}$:} Il \texttt{KeyCustodian} impone il blocco al rilascio della chiave di scrutinio tramite un rigoroso controllo temporale su $t_{\text{chiusura}}$. Poiché un'AE con controllo totale sulla macchina potrebbe aggirare questo blocco, la custodia \emph{offline} si conferma una fondamentale garanzia di natura \emph{procedurale} (\ref{subsec:3.3.2_limite_int2}).
+  \item \textbf{Custodia \emph{offline} di $PR_{ele}$:} Il \texttt{KeyCustodian} impone il blocco al rilascio della chiave di scrutinio tramite un rigoroso controllo temporale su $t_{\text{chiusura}}$. Poiché un'AE con controllo totale sulla macchina potrebbe aggirare questo blocco, la custodia \emph{offline} si conferma una fondamentale garanzia di natura \emph{procedurale} (\ref{subsec:3.3.4_limite_sec1}).
 
   \item \textbf{Fattore di randomizzazione ($r$):} Essendo gestito internamente dalla libreria \texttt{cryptography} e mai esposto a livello applicativo, il requisito crittografico di non-disponibilità del fattore $r$ di OAEP è soddisfatto per costruzione.
 
